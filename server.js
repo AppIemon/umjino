@@ -7,17 +7,30 @@ const MONGODB_URI = process.env.MONGODB_URI ||
   'mongodb+srv://admin:qwe098@cluster0.sw7tw.mongodb.net/?appName=Cluster0';
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
+let _client = null;
 let _db = null;
 async function getDb() {
   if (_db) return _db;
-  const client = new MongoClient(MONGODB_URI, {
-    serverSelectionTimeoutMS: 8000,
-    connectTimeoutMS: 8000,
-    socketTimeoutMS: 10000,
-  });
-  await client.connect();
-  _db = client.db('poker');
-  console.log('MongoDB connected');
+  if (!_client) {
+    _client = new MongoClient(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000,
+      socketTimeoutMS: 8000,
+      maxPoolSize: 1,          // serverless: 연결 1개로 충분
+      minPoolSize: 0,
+      maxIdleTimeMS: 10000,    // 10초 idle이면 반환
+    });
+  }
+  try {
+    await _client.connect();
+  } catch(e) {
+    // 이미 연결된 경우 무시
+    if (!e.message?.includes('already connected')) {
+      _client = null; _db = null;
+      throw e;
+    }
+  }
+  _db = _client.db('poker');
   return _db;
 }
 
@@ -990,9 +1003,12 @@ async function mpCleanup() {
 }
 
 // ─── 로컬 서버 시작 vs Serverless export ─────────────────────────────────────
-if (process.env.NETLIFY || process.env.VERCEL) {
+if (process.env.VERCEL) {
+  // Vercel: export express app directly as Node.js http handler
+  module.exports = app;
+} else if (process.env.NETLIFY) {
   const serverless = require('serverless-http');
-  module.exports = serverless(app);
+  module.exports.handler = serverless(app);
 } else {
   const PORT = process.env.PORT || 3000;
   getDb().then(async () => {

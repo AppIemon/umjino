@@ -1,3 +1,4 @@
-// Vercel 진입점 — server.js를 serverless 모드로 실행
+// Vercel 진입점 — Express app을 직접 export (serverless-http 불필요)
 process.env.VERCEL = '1';
-module.exports = require('../server');
+const app = require('../server');
+module.exports = app;
