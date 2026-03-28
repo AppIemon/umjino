@@ -1,0 +1,1006 @@
+const express = require('express');
+const { MongoClient } = require('mongodb');
+const crypto = require('crypto');
+const path = require('path');
+
+const MONGODB_URI = process.env.MONGODB_URI ||
+  'mongodb+srv://admin:qwe098@cluster0.sw7tw.mongodb.net/?appName=Cluster0';
+
+// ─── DB ───────────────────────────────────────────────────────────────────────
+let _db = null;
+async function getDb() {
+  if (_db) return _db;
+  const client = new MongoClient(MONGODB_URI, {
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 8000,
+    socketTimeoutMS: 10000,
+  });
+  await client.connect();
+  _db = client.db('poker');
+  console.log('MongoDB connected');
+  return _db;
+}
+
+// ─── Crypto ───────────────────────────────────────────────────────────────────
+const genSalt = () => crypto.randomBytes(16).toString('hex');
+const genToken = () => crypto.randomBytes(32).toString('hex');
+const hashPw = (pw, salt) =>
+  crypto.createHash('sha256').update(salt + ':' + pw).digest('hex');
+
+function cmpBigStr(a, b) {
+  const sa = (a || '0').replace(/^0+/, '') || '0';
+  const sb = (b || '0').replace(/^0+/, '') || '0';
+  if (sa.length !== sb.length) return sa.length - sb.length;
+  return sa.localeCompare(sb);
+}
+
+// ─── Tax (sqrt curve, max 10% at 72 digits) ───────────────────────────────────
+function calcTax(chipsStr) {
+  const chips = BigInt(chipsStr || '0');
+  if (chips <= 0n) return { after: chipsStr, tax: '0' };
+  const digits = Math.min(chipsStr.replace('-', '').length, 72);
+  const rateMil = BigInt(Math.round(100000 * Math.sqrt(digits / 72)));
+  const tax = chips * rateMil / 1000000n;
+  return { after: (chips - tax).toString(), tax: tax.toString() };
+}
+
+// ─── Bank interest ────────────────────────────────────────────────────────────
+function applyBankInterest(bank, now) {
+  if (!bank || BigInt(bank.amount || '0') <= 0n) return null;
+  const base = bank.interestAt ? new Date(bank.interestAt) : new Date(bank.depositedAt);
+  const days = Math.floor((now - base) / 86400000);
+  if (days <= 0) return null;
+  let v = BigInt(bank.amount);
+  for (let i = 0; i < Math.min(days, 3650); i++) v = v * 101n / 100n;
+  return { ...bank, amount: v.toString(), interestAt: now.toISOString() };
+}
+
+function bankStatus(bank, now) {
+  if (!bank) return { canWithdraw: false, hoursLeft: 0 };
+  const ms = now - new Date(bank.depositedAt);
+  if (ms >= 86400000) return { canWithdraw: true, hoursLeft: 0 };
+  return { canWithdraw: false, hoursLeft: Math.ceil((86400000 - ms) / 3600000) };
+}
+
+function applyDailyUpdates(p, now) {
+  const todayStr = now.toISOString().slice(0, 10);
+  const upd = {};
+  let chips = p.chips || '10';
+  let bank = p.bank || null;
+  let taxApplied = false, taxDays = 0, taxAmount = '0';
+
+  if ((p.lastTaxDate || '') !== todayStr) {
+    const daysSince = p.lastTaxDate
+      ? Math.max(1, Math.round((now - new Date(p.lastTaxDate)) / 86400000)) : 1;
+    let tot = 0n;
+    for (let i = 0; i < daysSince; i++) {
+      const r = calcTax(chips); tot += BigInt(r.tax); chips = r.after;
+    }
+    if (tot > 0n) { taxApplied = true; taxDays = daysSince; taxAmount = tot.toString(); }
+    upd.chips = chips; upd.lastTaxDate = todayStr;
+  }
+
+  if (bank) { const nb = applyBankInterest(bank, now); if (nb) { bank = nb; upd.bank = bank; } }
+  return { chips, bank, taxApplied, taxDays, taxAmount, upd };
+}
+
+
+
+// ─── Multiplayer: 세븐포커 Card helpers ─────────────────────────────────────
+const MP_SUITS = ['♠','♥','♦','♣'];
+const MP_RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const MP_RV = {A:14,K:13,Q:12,J:11,'10':10,9:9,8:8,7:7,6:6,5:5,4:4,3:3,2:2};
+
+function mpCreateDeck() {
+  const d = [];
+  for (const s of MP_SUITS) for (const r of MP_RANKS) d.push({suit:s,rank:r});
+  for (let i = d.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [d[i],d[j]]=[d[j],d[i]]; }
+  return d;
+}
+
+// Evaluate best 5-hand from any N cards (brute force combos)
+function mpBestFive(cards) {
+  if (cards.length <= 5) return mpEvalHand(cards);
+  let best = null;
+  for (let i = 0; i < cards.length; i++)
+    for (let j = i+1; j < cards.length; j++) {
+      const hand = cards.filter((_,k)=>k!==i&&k!==j);
+      const e = mpEvalHand(hand);
+      if (!best || mpCmpEval(e, best) > 0) best = e;
+    }
+  return best;
+}
+
+function mpEvalHand(hand) {
+  const vals = hand.map(c=>MP_RV[c.rank]).sort((a,b)=>b-a);
+  const ss = hand.map(c=>c.suit);
+  const isFlush = ss.every(s=>s===ss[0]);
+  const isStraight = vals.every((v,i)=>i===0||vals[i-1]-v===1)
+    ||(vals[0]===14&&vals[1]===5&&vals[2]===4&&vals[3]===3&&vals[4]===2);
+  const cnts = {}; vals.forEach(v=>cnts[v]=(cnts[v]||0)+1);
+  const cv = Object.values(cnts).sort((a,b)=>b-a);
+  const tieVals = [...vals]; // for tiebreak
+  if (isFlush&&isStraight&&vals[0]===14&&vals[1]===13) return {rank:9,name:'로얄 스트레이트 플러시',tieVals};
+  if (isFlush&&isStraight) return {rank:8,name:'스트레이트 플러시',tieVals};
+  if (cv[0]===4) return {rank:7,name:'포카드',tieVals};
+  if (cv[0]===3&&cv[1]===2) return {rank:6,name:'풀하우스',tieVals};
+  if (isFlush) return {rank:5,name:'플러시',tieVals};
+  if (isStraight) return {rank:4,name:'스트레이트',tieVals};
+  if (cv[0]===3) return {rank:3,name:'트리플',tieVals};
+  if (cv[0]===2&&cv[1]===2) return {rank:2,name:'투페어',tieVals};
+  if (cv[0]===2) return {rank:1,name:'원페어',tieVals};
+  return {rank:0,name:'노페어',tieVals};
+}
+
+function mpCmpEval(e1, e2) {
+  if (e1.rank !== e2.rank) return e1.rank - e2.rank;
+  const v1 = e1.tieVals, v2 = e2.tieVals;
+  for (let i = 0; i < Math.min(v1.length,v2.length); i++) if (v1[i]!==v2[i]) return v1[i]-v2[i];
+  return 0;
+}
+
+// ─── Match making ────────────────────────────────────────────────────────────
+async function mpTryMatch(db) {
+  const qCol = db.collection('mp_queue');
+  const queue = await qCol.find({}).sort({createdAt:1}).toArray();
+  if (queue.length < 2) return null;
+  const p1 = queue[0], p2 = queue[1];
+  await qCol.deleteMany({ _id: { $in: [p1._id, p2._id] } });
+  const minChips = cmpBigStr(p1.chips, p2.chips) <= 0 ? p1.chips : p2.chips;
+  const gameId = crypto.randomBytes(8).toString('hex');
+  const game = {
+    gameId,
+    phase: 'setting_bet',   // setting_bet → discard → bet1 → bet2 → bet3 → showdown
+    setter: Math.random() < 0.5 ? 0 : 1,
+    baseBet: null,           // set by setter; both pay this as ante
+    pot: '0',                // total chips in pot
+    roundHighBet: 0,         // highest bet in current round (token units)
+    actingPlayer: 0,         // index of player whose turn it is
+    roundComplete: false,
+    deck: [],
+    players: [
+      { nickname: p1.nickname, token: p1.token, chips: p1.chips,
+        cards: [],           // {suit,rank,faceUp}
+        folded: false,
+        roundPaid: 0,        // tokens paid this round
+        acted: false,
+      },
+      { nickname: p2.nickname, token: p2.token, chips: p2.chips,
+        cards: [],
+        folded: false,
+        roundPaid: 0,
+        acted: false,
+      },
+    ],
+    maxBet: minChips,
+    showdownResult: null,
+    result: null,
+    lastUpdate: new Date(),
+    createdAt: new Date(),
+  };
+  await db.collection('mp_games').insertOne(game);
+  return game;
+}
+
+// ─── Build view (hide opponent's face-down cards) ────────────────────────────
+function mpBuildGameView(game, pidx) {
+  const oidx = 1 - pidx;
+  const myP = game.players[pidx];
+  const opP = game.players[oidx];
+  const isShowdown = game.phase === 'showdown' || game.phase === 'finished';
+
+  const view = {
+    status: 'in_game',
+    gameId: game.gameId,
+    phase: game.phase,
+    pot: game.pot,
+    baseBet: game.baseBet,
+    maxBet: game.maxBet,
+    isSetter: game.setter === pidx,
+    actingPlayer: game.actingPlayer,
+    isMyTurn: game.actingPlayer === pidx,
+    roundHighBet: game.roundHighBet,
+    myNick: myP.nickname,
+    opNick: opP.nickname,
+    myChips: myP.chips,
+    opChips: opP.chips,
+    myFolded: myP.folded,
+    opFolded: opP.folded,
+    myRoundPaid: myP.roundPaid,
+    opRoundPaid: opP.roundPaid,
+    myActed: myP.acted,
+    opActed: opP.acted,
+    // My cards: all with faceUp flag
+    myCards: myP.cards,
+    // Opponent cards: only faceUp ones (unless showdown)
+    opCards: isShowdown ? opP.cards : opP.cards.filter(c=>c.faceUp),
+    showdownResult: game.showdownResult || null,
+  };
+
+  if (game.result) {
+    view.status = 'game_over';
+    view.winner = game.result.winner === -1 ? 'tie' :
+      (game.result.winner === pidx ? 'me' : 'opponent');
+    view.winnerNick = game.result.winner === -1 ? null : game.players[game.result.winner].nickname;
+    view.stakeAmount = game.result.stakeAmount || '0';
+    view.myCards = myP.cards;
+    view.opCards = opP.cards;
+  }
+  return view;
+}
+
+// ─── Game flow helpers ────────────────────────────────────────────────────────
+function mpStartNewBetRound(game, firstActorIdx) {
+  const base = Number(BigInt(game.baseBet || '1'));
+  game.roundHighBet = base; // starts at baseBet
+  game.actingPlayer = firstActorIdx;
+  game.players.forEach(p => { p.roundPaid = 0; p.acted = false; });
+  game.roundComplete = false;
+}
+
+function mpCheckBetRoundDone(game) {
+  const alive = game.players.filter(p=>!p.folded);
+  if (alive.length === 1) return true;
+  return alive.every(p => p.acted && p.roundPaid === game.roundHighBet);
+}
+
+// ─── /api/mp ─────────────────────────────────────────────────────────────────);
+
+// ── Advance game after betting round completes ─────────────────────────────
+async function mpAdvanceAfterBet(db, game) {
+  const gCol = db.collection('mp_games');
+  // Add round bets to pot
+  const roundTotal = game.players.reduce((s,p)=>s+p.roundPaid,0);
+  game.pot = (BigInt(game.pot||'0') + BigInt(roundTotal)).toString();
+  // Reset round bets
+  game.players.forEach(p=>{p.roundPaid=0;p.acted=false;});
+
+  if (game.phase === 'bet1') {
+    // Draw 1 face-up card each
+    game.players.forEach(p=>p.cards.push({...game.deck.pop(),faceUp:true}));
+    mpStartNewBetRound(game, 1-game.setter);
+    game.phase = 'bet2';
+  } else if (game.phase === 'bet2') {
+    // Draw 1 face-down card each (7th card)
+    game.players.forEach(p=>p.cards.push({...game.deck.pop(),faceUp:false}));
+    mpStartNewBetRound(game, 1-game.setter);
+    game.phase = 'bet3';
+  } else if (game.phase === 'bet3') {
+    // Showdown
+    await mpDoShowdown(db, game);
+  }
+}
+
+async function mpDoShowdown(db, game) {
+  // Reveal all cards
+  game.players.forEach(p=>p.cards.forEach(c=>c.faceUp=true));
+  const alive = game.players.filter(p=>!p.folded);
+  if (alive.length === 1) {
+    const wi = game.players.indexOf(alive[0]);
+    game.phase = 'showdown';
+    game.showdownResult = {winner:wi,byFold:true,myHandName:'폴드',opHandName:'승리',myBest:null,opBest:null};
+    await mpFinishGame(db, game, wi);
+    return;
+  }
+  const e0 = mpBestFive(game.players[0].cards);
+  const e1 = mpBestFive(game.players[1].cards);
+  const cmp = mpCmpEval(e0,e1);
+  const winnerIdx = cmp>0?0:cmp<0?1:-1;
+  game.showdownResult = {
+    winner: winnerIdx, byFold: false,
+    p0HandName: e0.name, p1HandName: e1.name,
+  };
+  game.phase = 'showdown';
+  await mpFinishGame(db, game, winnerIdx);
+}
+
+async function mpFinishGame(db, game, forceWinner) {
+  game.phase = 'finished';
+  const wi = forceWinner !== undefined ? forceWinner : (game.showdownResult?.winner ?? -1);
+  const pot = BigInt(game.pot||'0');
+  const col = db.collection('players');
+  try {
+    if (pot > 0n) {
+      if (wi !== -1) {
+        const winner = game.players[wi];
+        const wp = await col.findOne({nickname:winner.nickname});
+        if (wp) {
+          const wNew = (BigInt(wp.chips||'0')+pot).toString();
+          await col.updateOne({nickname:winner.nickname},{$set:{chips:wNew}});
+          if (cmpBigStr(wNew,wp.stats?.maxChips||'0')>0)
+            await col.updateOne({nickname:winner.nickname},{$set:{'stats.maxChips':wNew}});
+        }
+      } else {
+        // Tie: split pot
+        const half = pot/2n;
+        for (const p of game.players) {
+          const pl = await col.findOne({nickname:p.nickname});
+          if (pl) await col.updateOne({nickname:p.nickname},{$set:{chips:(BigInt(pl.chips||'0')+half).toString()}});
+        }
+      }
+    }
+  } catch(e) { console.error('mpFinishGame chips error',e); }
+  game.result = { winner: wi, stakeAmount: game.pot };
+  await db.collection('mp_games').updateOne(
+    {gameId:game.gameId},
+    {$set:{phase:game.phase,result:game.result,players:game.players,showdownResult:game.showdownResult,lastUpdate:new Date()}}
+  );
+}
+
+
+
+// ─── Multiplayer Roulette helpers ────────────────────────────────────────────
+const RL_COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#ff69b4'];
+const RL_RED = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+
+function rlNumColor(n) { return n===0?'green':RL_RED.has(n)?'red':'black'; }
+
+function rlCheckWin(type, targetNum, result) {
+  const c = rlNumColor(result);
+  if (type==='red') return c==='red';
+  if (type==='black') return c==='black';
+  if (type==='green') return result===0;
+  if (type==='odd') return result!==0&&result%2===1;
+  if (type==='even') return result!==0&&result%2===0;
+  if (type==='low') return result>=1&&result<=18;
+  if (type==='high') return result>=19&&result<=36;
+  if (type==='dozen1') return result>=1&&result<=12;
+  if (type==='dozen2') return result>=13&&result<=24;
+  if (type==='dozen3') return result>=25&&result<=36;
+  if (type==='number') return result===Number(targetNum);
+  return false;
+}
+
+function rlMultiplier(type) {
+  if (type==='number'||type==='green') return 35;
+  if (type==='dozen1'||type==='dozen2'||type==='dozen3') return 2;
+  return 1;
+}
+
+async function rlGetState(db) {
+  const col = db.collection('roulette_state');
+  let s = await col.findOne({ _id: 'global' });
+  if (!s) {
+    s = { _id: 'global', phase: 'betting', players: [], bets: [], skipVotes: [],
+      phaseStart: new Date(), spinResult: null, payouts: [], lastUpdate: new Date() };
+    await col.insertOne(s);
+  }
+  return s;
+}
+
+async function rlAdvancePhase(db, state) {
+  const now = Date.now();
+  const elapsed = now - new Date(state.phaseStart).getTime();
+  const col = db.collection('roulette_state');
+  const pCol = db.collection('players');
+
+  const activePlayers = state.players.filter(p =>
+    now - new Date(p.lastPing || state.phaseStart).getTime() < 25000
+  );
+
+  if (state.phase === 'betting') {
+    const activeCount = Math.max(1, activePlayers.length);
+    const skipCount = state.skipVotes.filter(n => activePlayers.some(p=>p.nick===n)).length;
+    const skipReached = activePlayers.length >= 2 && skipCount / activeCount >= 0.66;
+    const timedOut = elapsed >= 30000;
+
+    if ((timedOut || skipReached) && state.bets.length > 0) {
+      const result = Math.floor(Math.random() * 37);
+      const payouts = [];
+      for (const bet of state.bets) {
+        const betAmt = BigInt(bet.amount||'0');
+        const won = rlCheckWin(bet.type, bet.targetNum, result);
+        const mult = rlMultiplier(bet.type);
+        const winAmt = won ? betAmt * BigInt(mult + 1) : 0n;
+        payouts.push({ nick: bet.nick, won, type: bet.type, betAmount: bet.amount, winAmount: winAmt.toString() });
+        if (won) {
+          try {
+            const p = await pCol.findOne({ nickname: bet.nick });
+            if (p) await pCol.updateOne({ nickname: bet.nick }, { $set: { chips: (BigInt(p.chips||'0') + winAmt).toString() } });
+          } catch(e) {}
+        }
+      }
+      await col.updateOne({ _id: 'global' }, { $set: {
+        phase: 'spinning', spinResult: result, payouts, players: activePlayers,
+        phaseStart: new Date(), lastUpdate: new Date()
+      }});
+      return { ...state, phase: 'spinning', spinResult: result, payouts, players: activePlayers, phaseStart: new Date() };
+    }
+    if (timedOut && state.bets.length === 0) {
+      await col.updateOne({ _id: 'global' }, { $set: {
+        phaseStart: new Date(), skipVotes: [], players: activePlayers, lastUpdate: new Date()
+      }});
+    }
+  } else if (state.phase === 'spinning' && elapsed >= 3500) {
+    await col.updateOne({ _id: 'global' }, { $set: {
+      phase: 'result', phaseStart: new Date(), lastUpdate: new Date()
+    }});
+    return { ...state, phase: 'result', phaseStart: new Date() };
+  } else if (state.phase === 'result' && elapsed >= 8000) {
+    await col.updateOne({ _id: 'global' }, { $set: {
+      phase: 'betting', bets: [], skipVotes: [], spinResult: null, payouts: [],
+      players: activePlayers, phaseStart: new Date(), lastUpdate: new Date()
+    }});
+    return { ...state, phase: 'betting', bets: [], skipVotes: [], spinResult: null, payouts: [], players: activePlayers, phaseStart: new Date() };
+  }
+  return state;
+}
+
+// ─── Express app ─────────────────────────────────────────────────────────────
+const app = express();
+app.use(express.json());
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+if (!process.env.NETLIFY) {
+  const path = require('path');
+  app.use(express.static(path.join(__dirname, 'public')));
+  app.get('/', (req, res) =>
+    res.sendFile(path.join(__dirname, 'public', 'index.html'))
+  );
+}
+
+// ─── /api/player ─────────────────────────────────────────────────────────────
+app.get('/api/player', async (req, res) => {
+  const { action, nick, token } = req.query;
+  if (action !== 'load') return res.status(404).json({ error: 'not found' });
+  if (!nick || !token) return res.status(400).json({ error: 'missing' });
+  try {
+    const col = (await getDb()).collection('players');
+    const p = await col.findOne({ nickname: nick, token });
+    if (!p) return res.status(401).json({ error: '세션 만료. 다시 로그인해 주세요.' });
+    const now = new Date();
+    const { chips, bank, taxApplied, taxDays, taxAmount, upd } = applyDailyUpdates(p, now);
+    if (Object.keys(upd).length) await col.updateOne({ nickname: nick }, { $set: upd });
+    const st = bankStatus(bank, now);
+    res.json({
+      chips, stats: p.stats || {}, bank: bank ? { ...bank, ...st } : null,
+      cancelTickets: p.cancelTickets || 0, taxApplied, taxDays, taxAmount
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/player', async (req, res) => {
+  const { action } = req.query;
+  const body = req.body || {};
+  try {
+    const database = await getDb();
+    const col = database.collection('players');
+    const now = new Date();
+
+    if (action === 'register') {
+      const { nickname, password } = body;
+      if (!nickname || nickname.length < 2 || nickname.length > 12)
+        return res.status(400).json({ error: '닉네임은 2~12자' });
+      if (!password || password.length < 4)
+        return res.status(400).json({ error: '비밀번호 4자 이상' });
+      if (await col.findOne({ nickname }))
+        return res.status(409).json({ error: '이미 사용중인 닉네임' });
+      const salt = genSalt(), token = genToken();
+      await col.insertOne({
+        nickname, salt, passwordHash: hashPw(password, salt), token,
+        chips: '10',
+        stats: { maxChips: '10', maxWin: '0', bestHand: '-', bestHandPayout: 0, totalGames: 0, totalWins: 0 },
+        bank: null, cancelTickets: 0,
+        lastTaxDate: now.toISOString().slice(0, 10), createdAt: now,
+      });
+      return res.json({ token, chips: '10', stats: {}, bank: null, cancelTickets: 0, taxApplied: false });
+    }
+
+    if (action === 'login') {
+      const { nickname, password } = body;
+      if (!nickname || !password) return res.status(400).json({ error: '닉네임/비밀번호 필요' });
+      const p = await col.findOne({ nickname });
+      if (!p) return res.status(404).json({ error: '없는 닉네임' });
+      const valid = p.salt
+        ? hashPw(password, p.salt) === p.passwordHash
+        : crypto.createHash('sha256').update(password).digest('hex') === p.passwordHash;
+      if (!valid) return res.status(401).json({ error: '비밀번호 틀림' });
+      const token = genToken();
+      const { chips, bank, taxApplied, taxDays, taxAmount, upd } = applyDailyUpdates(p, now);
+      upd.token = token; upd.lastLoginAt = now;
+      if (!p.salt) { upd.salt = genSalt(); upd.passwordHash = hashPw(password, upd.salt); }
+      await col.updateOne({ nickname }, { $set: upd });
+      const st = bankStatus(bank, now);
+      return res.json({
+        token, chips, stats: p.stats || {},
+        bank: bank ? { ...bank, ...st } : null,
+        cancelTickets: p.cancelTickets || 0, taxApplied, taxDays, taxAmount
+      });
+    }
+
+    if (action === 'save') {
+      const { nickname, token, chips, stats, cancelTickets } = body;
+      if (!nickname || !token) return res.status(400).json({ error: 'missing' });
+      const p = await col.findOne({ nickname, token });
+      if (!p) return res.status(401).json({ error: '인증 실패' });
+      const upd = {};
+      if (chips !== undefined) upd.chips = chips;
+      if (stats) upd.stats = stats;
+      if (typeof cancelTickets === 'number') {
+        const cur = p.cancelTickets || 0;
+        if (cancelTickets < cur) upd.cancelTickets = Math.max(0, cancelTickets);
+      }
+      await col.updateOne({ nickname }, { $set: upd });
+      return res.json({ ok: true });
+    }
+
+    if (action === 'bank-deposit') {
+      const { nickname, token, amount } = body;
+      const amt = BigInt(amount || '0');
+      if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
+      // Atomic: only deduct if chips >= amt
+      const result = await col.findOneAndUpdate(
+        { nickname, token, $expr: { $gte: [{ $toLong: '$chips' }, Number(amt > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : amt)] } },
+        {},  // We'll do manual update below after validation
+        { returnDocument: 'before' }
+      );
+      // Fallback: manual check
+      const p = await col.findOne({ nickname, token });
+      if (!p) return res.status(401).json({ error: '인증 실패' });
+      const cur = BigInt(p.chips || '0');
+      if (amt > cur) return res.status(400).json({ error: '잔액 부족' });
+      let existing = p.bank;
+      if (existing && BigInt(existing.amount || '0') > 0n) {
+        const nb = applyBankInterest(existing, now); if (nb) existing = nb;
+      }
+      const prevAmt = BigInt(existing?.amount || '0');
+      const newBank = { amount: (prevAmt + amt).toString(), depositedAt: now.toISOString(), interestAt: now.toISOString() };
+      const newChips = (cur - amt).toString();
+      // Atomic update: only update if chips still matches (prevent double-submit)
+      const updateResult = await col.updateOne(
+        { nickname, token, chips: cur.toString() },
+        { $set: { chips: newChips, bank: newBank } }
+      );
+      if (updateResult.modifiedCount === 0)
+        return res.status(409).json({ error: '중복 요청 또는 잔액 변경됨' });
+      return res.json({ chips: newChips, bank: { ...newBank, canWithdraw: false, hoursLeft: 24 } });
+    }
+
+    if (action === 'bank-withdraw') {
+      const { nickname, token } = body;
+      const p = await col.findOne({ nickname, token });
+      if (!p) return res.status(401).json({ error: '인증 실패' });
+      if (!p.bank?.amount || p.bank.amount === '0')
+        return res.status(400).json({ error: '은행 잔액 없음' });
+      const ms = now - new Date(p.bank.depositedAt);
+      if (ms < 86400000) {
+        const h = Math.ceil((86400000 - ms) / 3600000);
+        return res.status(400).json({ error: `아직 ${h}시간 남았습니다` });
+      }
+      const nb = applyBankInterest(p.bank, now);
+      const finalAmt = BigInt((nb || p.bank).amount);
+      const newChips = (BigInt(p.chips || '0') + finalAmt).toString();
+      await col.updateOne({ nickname }, { $set: { chips: newChips, bank: null } });
+      return res.json({ chips: newChips, withdrawn: finalAmt.toString() });
+    }
+
+    res.status(404).json({ error: 'unknown action' });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// ─── /api/ranking ─────────────────────────────────────────────────────────────
+app.get('/api/ranking', async (req, res) => {
+  const { nick } = req.query;
+  try {
+    const col = (await getDb()).collection('players');
+    const docs = await col.find({}, { projection: { nickname: 1, stats: 1, createdAt: 1 } }).toArray();
+    docs.sort((a, b) => cmpBigStr(b.stats?.maxChips || '0', a.stats?.maxChips || '0'));
+    const top100 = docs.slice(0, 100).map((d, i) => ({
+      rank: i + 1, nickname: d.nickname, maxChips: d.stats?.maxChips || '0',
+    }));
+    let userRank = -1, surrounding = [];
+    if (nick) {
+      userRank = docs.findIndex(d => d.nickname === nick);
+      if (userRank >= 100) {
+        surrounding = docs.slice(Math.max(0, userRank - 1), userRank + 2)
+          .map((d, i) => ({ rank: Math.max(0, userRank - 1) + i + 1, nickname: d.nickname, maxChips: d.stats?.maxChips || '0' }));
+      }
+    }
+    res.json({ top100, userRank: userRank + 1, surrounding });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+
+app.get('/api/mp', async (req, res) => {
+  const { action, nickname, token } = req.query;
+  try {
+    const db = await getDb();
+    const qCol = db.collection('mp_queue');
+    const gCol = db.collection('mp_games');
+    if (!nickname || !token) return res.status(400).json({ error: 'missing' });
+    const me = await db.collection('players').findOne({ nickname, token });
+    if (!me) return res.status(401).json({ error: '인증 실패' });
+
+    if (action === 'poll') {
+      const game = await gCol.findOne({
+        $or: [{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase: { $ne: 'cleanup' }
+      });
+      if (game) {
+        const pidx = game.players[0].nickname===nickname ? 0 : 1;
+        if (Date.now()-new Date(game.lastUpdate).getTime() > 90000 &&
+            !['showdown','finished'].includes(game.phase)) {
+          await mpFinishGame(db, game, pidx);
+          return res.json({status:'game_over',winner:'me',stakeAmount:game.result?.stakeAmount||'0'});
+        }
+        return res.json(mpBuildGameView(game, pidx));
+      }
+      const inQueue = await qCol.findOne({ nickname });
+      if (inQueue) {
+        await mpTryMatch(db);
+        const newGame = await gCol.findOne({
+          $or: [{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+          phase: { $ne: 'cleanup' }
+        });
+        if (newGame) return res.json(mpBuildGameView(newGame, newGame.players[0].nickname===nickname?0:1));
+        return res.json({ status: 'queued' });
+      }
+      return res.json({ status: 'idle' });
+    }
+    res.status(400).json({ error: 'unknown action' });
+  } catch(e) { console.error('GET /api/mp', e); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/mp', async (req, res) => {
+  const { action } = req.query;
+  const body = req.body || {};
+  try {
+    const db = await getDb();
+    const qCol = db.collection('mp_queue');
+    const gCol = db.collection('mp_games');
+    const { nickname, token } = body;
+    if (!nickname||!token) return res.status(400).json({ error: 'missing' });
+    const me = await db.collection('players').findOne({ nickname, token });
+    if (!me) return res.status(401).json({ error: '인증 실패' });
+
+    // ── queue ──────────────────────────────────────────────────────────────
+    if (action === 'queue') {
+      const existGame = await gCol.findOne({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase:{$ne:'cleanup'}
+      });
+      if (existGame) return res.status(400).json({ error: '이미 게임 중' });
+      const existQ = await qCol.findOne({ nickname });
+      if (!existQ) {
+        const chipsNum = Number(BigInt(me.chips||'10') > 9007199254740991n ? 9007199254740991n : BigInt(me.chips||'10'));
+        await qCol.insertOne({ nickname, token, chips: me.chips||'10', chips_num: chipsNum, createdAt: new Date() });
+      }
+      const game = await mpTryMatch(db);
+      if (game) return res.json(mpBuildGameView(game, game.players[0].nickname===nickname?0:1));
+      return res.json({ status: 'queued' });
+    }
+
+    // ── cancel_queue ────────────────────────────────────────────────────────
+    if (action === 'cancel_queue') { await qCol.deleteMany({ nickname }); return res.json({ status: 'idle' }); }
+
+    // ── set_bet: setter picks base bet (ante) ──────────────────────────────
+    if (action === 'set_bet') {
+      const game = await gCol.findOne({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase:'setting_bet'
+      });
+      if (!game) return res.status(400).json({ error: '게임 없음' });
+      const pidx = game.players[0].nickname===nickname?0:1;
+      if (game.setter !== pidx) return res.status(400).json({ error: '권한 없음' });
+
+      // baseBet is derived from minChips/50, not user input
+      const minChips = cmpBigStr(game.players[0].chips, game.players[1].chips) <= 0
+        ? BigInt(game.players[0].chips) : BigInt(game.players[1].chips);
+      const baseBet = minChips / 50n > 0n ? minChips / 50n : 1n;
+
+      // Both players pay the ante (baseBet each)
+      const p0 = await db.collection('players').findOne({nickname:game.players[0].nickname});
+      const p1 = await db.collection('players').findOne({nickname:game.players[1].nickname});
+      const new0 = (BigInt(p0.chips||'0')-baseBet).toString();
+      const new1 = (BigInt(p1.chips||'0')-baseBet).toString();
+      await db.collection('players').updateOne({nickname:game.players[0].nickname},{$set:{chips:new0}});
+      await db.collection('players').updateOne({nickname:game.players[1].nickname},{$set:{chips:new1}});
+      game.players[0].chips = new0; game.players[1].chips = new1;
+      game.baseBet = baseBet.toString();
+      game.pot = (baseBet*2n).toString();
+
+      // Deal 4 cards to each player
+      game.deck = mpCreateDeck();
+      game.players.forEach(p => {
+        p.cards = [];
+        for (let i=0;i<4;i++) p.cards.push({...game.deck.pop(), faceUp:false});
+      });
+      game.phase = 'discard';
+      game.players.forEach(p => { p.folded=false; p.roundPaid=0; p.acted=false; });
+      await gCol.updateOne({gameId:game.gameId},{$set:{
+        baseBet:game.baseBet, pot:game.pot, phase:game.phase,
+        deck:game.deck, players:game.players, lastUpdate:new Date()
+      }});
+      return res.json(mpBuildGameView(game, pidx));
+    }
+
+    // ── discard: pick 1 card to discard (index 0-3), then set face-up ────
+    if (action === 'discard') {
+      const game = await gCol.findOne({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase:'discard'
+      });
+      if (!game) return res.status(400).json({ error: '버리기 불가' });
+      const pidx = game.players[0].nickname===nickname?0:1;
+      const p = game.players[pidx];
+      if (p.acted) return res.status(400).json({ error: '이미 버림' });
+
+      const discardIdx = parseInt(body.discardIdx);
+      if (isNaN(discardIdx)||discardIdx<0||discardIdx>3)
+        return res.status(400).json({ error: '0~3 인덱스' });
+
+      // Remove discarded card
+      p.cards.splice(discardIdx, 1); // now 3 cards remain
+      // First card: face-up, remaining two: face-down
+      p.cards[0].faceUp = true;
+      p.cards[1].faceUp = false;
+      p.cards[2].faceUp = false;
+      p.acted = true;
+
+      // Check if both discarded
+      if (game.players.every(pl=>pl.acted)) {
+        // Draw 2 more face-up cards each
+        game.players.forEach(pl => {
+          pl.cards.push({...game.deck.pop(), faceUp:true});
+          pl.cards.push({...game.deck.pop(), faceUp:true});
+          pl.acted = false; pl.roundPaid = 0;
+        });
+        // 1차 베팅: non-setter acts first
+        const firstActor = 1 - game.setter;
+        mpStartNewBetRound(game, firstActor);
+        game.phase = 'bet1';
+      }
+      await gCol.updateOne({gameId:game.gameId},{$set:{
+        phase:game.phase, deck:game.deck, players:game.players,
+        roundHighBet:game.roundHighBet, actingPlayer:game.actingPlayer, lastUpdate:new Date()
+      }});
+      return res.json(mpBuildGameView(game, pidx));
+    }
+
+    // ── bet_action: check/call/raise/fold ─────────────────────────────────
+    if (action === 'bet_action') {
+      const game = await gCol.findOne({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase:{$in:['bet1','bet2','bet3']}
+      });
+      if (!game) return res.status(400).json({ error: '베팅 불가' });
+      const pidx = game.players[0].nickname===nickname?0:1;
+      if (game.actingPlayer !== pidx) return res.status(400).json({ error: '상대 차례' });
+      const p = game.players[pidx];
+      const op = game.players[1-pidx];
+      if (p.folded) return res.status(400).json({ error: '이미 폴드' });
+
+      const betAct = body.betAction;
+      const base = BigInt(game.baseBet || '1');
+      // Raise amount must be a multiple of baseBet
+      const raiseUnits = Math.max(1, parseInt(body.raiseUnits)||1);
+      const raiseAmt = Number(base) * raiseUnits;
+
+      if (betAct === 'fold') {
+        p.folded = true;
+        game.phase = 'showdown';
+        game.showdownResult = { winner: 1-pidx, byFold: true };
+        await mpFinishGame(db, game, 1-pidx);
+      } else if (betAct === 'check') {
+        if (game.roundHighBet > p.roundPaid) return res.status(400).json({ error: '콜 필요' });
+        p.acted = true;
+        if (mpCheckBetRoundDone(game)) await mpAdvanceAfterBet(db, game);
+        else game.actingPlayer = 1-pidx;
+      } else if (betAct === 'call') {
+        p.roundPaid = game.roundHighBet;
+        p.acted = true;
+        if (mpCheckBetRoundDone(game)) await mpAdvanceAfterBet(db, game);
+        else game.actingPlayer = 1-pidx;
+      } else if (betAct === 'raise') {
+        const totalBet = game.roundHighBet + raiseAmt;
+        p.roundPaid = totalBet;
+        game.roundHighBet = totalBet;
+        p.acted = true; op.acted = false;
+        game.actingPlayer = 1-pidx;
+      } else {
+        return res.status(400).json({ error: '알 수 없는 액션' });
+      }
+
+      await gCol.updateOne({gameId:game.gameId},{$set:{
+        phase:game.phase, deck:game.deck, players:game.players,
+        pot:game.pot, roundHighBet:game.roundHighBet,
+        actingPlayer:game.actingPlayer, showdownResult:game.showdownResult,
+        result:game.result, lastUpdate:new Date()
+      }});
+      return res.json(mpBuildGameView(game, pidx));
+    }
+
+    // ── leave ──────────────────────────────────────────────────────────────
+    if (action === 'leave') {
+      await qCol.deleteMany({ nickname });
+      const game = await gCol.findOne({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase:{$nin:['cleanup','finished']}
+      });
+      if (game) { const pidx=game.players[0].nickname===nickname?0:1; await mpFinishGame(db,game,1-pidx); }
+      await gCol.updateMany({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase:'finished'
+      },{$set:{phase:'cleanup'}});
+      return res.json({ status: 'idle' });
+    }
+
+    res.status(400).json({ error: 'unknown action' });
+  } catch(e) { console.error('POST /api/mp', e); res.status(500).json({ error: e.message }); }
+});
+
+// ─── /api/roulette ────────────────────────────────────────────────────────────
+app.get('/api/roulette', async (req, res) => {
+  const { nick, token } = req.query;
+  if (!nick || !token) return res.status(400).json({ error: 'missing' });
+  try {
+    const db = await getDb();
+    const player = await db.collection('players').findOne({ nickname: nick, token });
+    if (!player) return res.status(401).json({ error: '인증 실패' });
+
+    let state = await rlGetState(db);
+    state = await rlAdvancePhase(db, state);
+
+    // Update this player's ping
+    await db.collection('roulette_state').updateOne(
+      { _id: 'global', 'players.nick': nick },
+      { $set: { 'players.$.lastPing': new Date() } }
+    );
+
+    const now = Date.now();
+    const elapsed = now - new Date(state.phaseStart).getTime();
+    const dur = state.phase==='betting'?30000:state.phase==='spinning'?3500:8000;
+    const remainingMs = Math.max(0, dur - elapsed);
+    const myColor = state.players.find(p=>p.nick===nick)?.color || null;
+    const myBet = state.bets.find(b=>b.nick===nick) || null;
+
+    res.json({
+      phase: state.phase,
+      players: state.players.map(p=>({ nick: p.nick, color: p.color })),
+      bets: state.bets.map(b=>({ nick: b.nick, type: b.type, amount: b.amount })),
+      skipVotes: state.skipVotes,
+      spinResult: state.spinResult,
+      payouts: state.payouts,
+      myColor,
+      myBet,
+      remainingMs,
+      myChips: player.chips || '10',
+    });
+  } catch(e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/roulette', async (req, res) => {
+  const { action } = req.query;
+  const body = req.body || {};
+  const { nickname, token } = body;
+  if (!nickname || !token) return res.status(400).json({ error: 'missing' });
+  try {
+    const db = await getDb();
+    const player = await db.collection('players').findOne({ nickname, token });
+    if (!player) return res.status(401).json({ error: '인증 실패' });
+    const rlCol = db.collection('roulette_state');
+
+    if (action === 'join') {
+      const state = await rlGetState(db);
+      if (!state.players.find(p=>p.nick===nickname)) {
+        const used = state.players.map(p=>p.color);
+        const color = RL_COLORS.find(c=>!used.includes(c)) || RL_COLORS[state.players.length % RL_COLORS.length];
+        await rlCol.updateOne({ _id: 'global' }, {
+          $push: { players: { nick: nickname, color, lastPing: new Date() } }
+        });
+        return res.json({ color });
+      }
+      return res.json({ color: state.players.find(p=>p.nick===nickname).color });
+    }
+
+    if (action === 'bet') {
+      const state = await rlGetState(db);
+      if (state.phase !== 'betting') return res.status(400).json({ error: '베팅 시간이 아닙니다' });
+      const { betType, amount, targetNum } = body;
+      const betAmt = BigInt(amount || '0');
+      if (betAmt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
+
+      // Re-fetch chips + handle existing bet refund
+      const existing = state.bets.find(b=>b.nick===nickname);
+      const refund = existing ? BigInt(existing.amount) : 0n;
+      const fresh = await db.collection('players').findOne({ nickname });
+      const available = BigInt(fresh.chips||'0') + refund;
+      if (betAmt > available) return res.status(400).json({ error: '칩 부족' });
+
+      const newChips = (available - betAmt).toString();
+      await db.collection('players').updateOne({ nickname }, { $set: { chips: newChips } });
+      await rlCol.updateOne({ _id: 'global' }, { $pull: { bets: { nick: nickname } } });
+      await rlCol.updateOne({ _id: 'global' }, { $push: { bets: { nick: nickname, type: betType, amount: amount, targetNum: targetNum ?? null } } });
+      return res.json({ ok: true, chips: newChips });
+    }
+
+    if (action === 'vote_skip') {
+      const state = await rlGetState(db);
+      if (state.phase !== 'betting') return res.status(400).json({ error: '베팅 중이 아님' });
+      if (!state.skipVotes.includes(nickname)) {
+        await rlCol.updateOne({ _id: 'global' }, { $push: { skipVotes: nickname } });
+      }
+      return res.json({ ok: true });
+    }
+
+    if (action === 'leave') {
+      // Refund any active bet
+      const state = await rlGetState(db);
+      if (state.phase === 'betting') {
+        const bet = state.bets.find(b=>b.nick===nickname);
+        if (bet) {
+          const p = await db.collection('players').findOne({ nickname });
+          if (p) await db.collection('players').updateOne({ nickname }, { $set: { chips: (BigInt(p.chips||'0')+BigInt(bet.amount)).toString() } });
+          await rlCol.updateOne({ _id: 'global' }, { $pull: { bets: { nick: nickname } } });
+        }
+      }
+      await rlCol.updateOne({ _id: 'global' }, { $pull: { players: { nick: nickname }, skipVotes: nickname } });
+      return res.json({ ok: true });
+    }
+
+    res.status(400).json({ error: 'unknown action' });
+  } catch(e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
+// ─── Online Presence ──────────────────────────────────────────────────────────
+app.post('/api/presence', async (req, res) => {
+  try {
+    const { nickname, token } = req.body || {};
+    if (!nickname || !token) return res.json({ online: [] });
+    const db = await getDb();
+    const player = await db.collection('players').findOne({ nickname, token });
+    if (!player) return res.json({ online: [] });
+    const now = new Date();
+    await db.collection('presence').updateOne(
+      { nickname },
+      { $set: { nickname, lastSeen: now } },
+      { upsert: true }
+    );
+    const cutoff = new Date(now - 30000);
+    const online = await db.collection('presence').find(
+      { lastSeen: { $gt: cutoff } },
+      { projection: { nickname: 1 } }
+    ).toArray();
+    res.json({ online: online.map(p => p.nickname) });
+  } catch(e) { res.json({ online: [] }); }
+});
+
+// ─── Cleanup stale queue/games periodically ─────────────────────────────────
+async function mpCleanup() {
+  try {
+    const db = await getDb();
+    const now = new Date();
+    await db.collection('mp_queue').deleteMany({ createdAt: { $lt: new Date(now - 300000) } });
+    await db.collection('mp_games').deleteMany({
+      phase: { $in: ['cleanup', 'finished'] },
+      lastUpdate: { $lt: new Date(now - 600000) }
+    });
+    // Remove stale roulette players (no ping for 30s)
+    await db.collection('roulette_state').updateOne({ _id: 'global' }, {
+      $pull: { players: { lastPing: { $lt: new Date(now - 30000) } } }
+    });
+    // Remove stale presence entries
+    await db.collection('presence').deleteMany({ lastSeen: { $lt: new Date(now - 60000) } });
+  } catch(e) {}
+}
+
+// ─── 로컬 서버 시작 vs Serverless export ─────────────────────────────────────
+if (process.env.NETLIFY || process.env.VERCEL) {
+  const serverless = require('serverless-http');
+  module.exports = serverless(app);
+} else {
+  const PORT = process.env.PORT || 3000;
+  getDb().then(async () => {
+    await mpCleanup();
+    setInterval(mpCleanup, 120000);
+    app.listen(PORT, () => console.log(`서버 실행 중: http://localhost:${PORT}`));
+  }).catch(e => {
+    console.error('DB 연결 실패:', e.message);
+    process.exit(1);
+  });
+}

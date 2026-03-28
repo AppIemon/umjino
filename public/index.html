@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>엄지노</title>
+  <link rel="stylesheet" href="./css/main.css">
+</head>
+<body>
+
+<nav class="main-nav">
+  <div class="nav-brand">🃏 엄지노</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('poker')">🃏 포커</button>
+    <button class="nav-tab" onclick="switchTab('roulette')">🎡 룰렛</button>
+    <button class="nav-tab" onclick="switchTab('slot')">🎰 슬롯</button>
+    <button class="nav-tab" onclick="switchTab('pvp')">⚔️ 멀티</button>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-icon-btn" onclick="showBank()">🏦</button>
+    <button class="nav-icon-btn" onclick="showRanking()">🏆</button>
+    <button class="nav-icon-btn" id="musicButton" onclick="toggleMusic()">🔇</button>
+  </div>
+</nav>
+
+<div id="stickmanLayer"></div>
+<div class="ticket-count" id="ticketCount">🎫 취소권 <span id="ticketNum">0</span></div>
+
+<audio id="bgMusic" loop><source src="./music.mp3" type="audio/mpeg"></audio>
+<audio id="bgMusicRoulette" loop><source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" type="audio/mpeg"></audio>
+<audio id="bgMusicSlot" loop><source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" type="audio/mpeg"></audio>
+
+<!-- POKER -->
+<div class="tab-page active" id="tabPoker">
+  <div class="main-area">
+    <div class="cards-area" id="cardsArea"></div>
+    <div class="betting-zone" id="bettingZone">
+      <div class="betting-zone-label">베팅 영역</div>
+      <div class="bet-amount" id="betAmount">0</div>
+    </div>
+    <div class="player-chips-area">
+      <div class="chips-label">내 칩 💰</div>
+      <div class="chips-scroll"><div class="chips-container" id="chipsContainer"></div></div>
+      <div class="action-buttons">
+        <button class="action-button clear-button" onclick="clearBet()">베팅 취소</button>
+        <button class="action-button deal-button" id="dealButton" onclick="deal()">게임 시작</button>
+        <button class="action-button draw-button" id="drawButton" onclick="draw()" disabled>카드 교환</button>
+      </div>
+    </div>
+  </div>
+  <div class="paytable">
+    <h3>배당표</h3>
+    <div class="paytable-grid">
+      <div>로얄 플러시</div><div class="hand-payout">x1000</div>
+      <div>스트레이트 플러시</div><div class="hand-payout">x250</div>
+      <div>포카드</div><div class="hand-payout">x50</div>
+      <div>풀하우스</div><div class="hand-payout">x25</div>
+      <div>플러시</div><div class="hand-payout">x15</div>
+      <div>스트레이트</div><div class="hand-payout">x10</div>
+      <div>트리플</div><div class="hand-payout">x5</div>
+      <div>투페어</div><div class="hand-payout">x3</div>
+      <div>원페어</div><div class="hand-payout">x1.5</div>
+    </div>
+  </div>
+  <div class="stats-panel">
+    <h3>개인 기록</h3>
+    <div class="stats-grid">
+      <div class="stat-label">최고 보유</div><div class="stat-value" id="maxChips">0</div>
+      <div class="stat-label">최대 승리</div><div class="stat-value" id="maxWin">0</div>
+      <div class="stat-label">최고 족보</div><div class="stat-value" id="bestHand">-</div>
+      <div class="stat-label">총 게임</div><div class="stat-value" id="totalGames">0</div>
+      <div class="stat-label">승리</div><div class="stat-value" id="totalWins">0</div>
+      <div class="stat-label">승률</div><div class="stat-value" id="winRate">0%</div>
+    </div>
+  </div>
+</div>
+
+<!-- ROULETTE -->
+<div class="tab-page" id="tabRoulette">
+  <div class="rl-left">
+    <div class="rl-wheel-wrap">
+      <div class="rl-wheel-tilt">
+        <canvas id="rlCanvas" width="300" height="300"></canvas>
+        <div class="rl-ball-orbit" id="rlBallOrbit"><div class="rl-ball" id="rlBall"></div></div>
+      </div>
+      <div class="rl-wheel-shadow"></div>
+    </div>
+    <div class="rl-players-row" id="rlPlayersRow"></div>
+    <div class="rl-phase-bar" id="rlPhaseBar">룰렛 참가 후 베팅 가능</div>
+    <div class="rl-result-msg" id="rlResultMsg"></div>
+    <div style="font-size:.68rem;color:#555;width:100%;margin-bottom:.08rem">💰 칩 선택 → 배팅 칸 클릭</div>
+    <div class="rl-chip-row" id="rlChipRow"></div>
+    <div class="rl-sel-display" id="rlSelDisplay">배팅 칸을 클릭하세요</div>
+    <div class="rl-bet-row-btns" id="rlBetBtns" style="display:none">
+      <button class="rl-confirm-btn" id="rlConfirmBtn" onclick="confirmRouletteBet()">베팅 확정 ✓</button>
+      <button class="rl-clear-btn" onclick="rlClearPending()">초기화</button>
+      <button class="rl-skip-btn" id="rlSkipBtn" onclick="rlVoteSkip()">⏩ 스킵</button>
+    </div>
+    <div id="rlSkipInfo" style="font-size:.68rem;color:#555;text-align:center"></div>
+    <div class="rl-bets-list" id="rlBetsList"><span style="color:#333">베팅 내역 없음</span></div>
+    <button class="rl-join-btn" id="rlJoinBtn" onclick="rlToggleJoin()">🎡 룰렛 참가</button>
+  </div>
+  <div class="rl-right">
+    <div class="rl-table-title">🎡 배팅 테이블</div>
+    <div id="rlTableGrid" style="overflow-x:auto;flex:1"></div>
+  </div>
+</div>
+
+<!-- SLOT -->
+<div class="tab-page" id="tabSlot">
+  <div class="slot-header">
+    <div class="slot-my-chips">💰 <span id="slotMyChips">0</span></div>
+    <div style="color:#333;font-size:.7rem;margin-left:auto">병렬 5x3 슬롯 (최대 4대)</div>
+  </div>
+  <div class="slot-machines-area" id="slotMachinesArea">
+    <div class="add-machine-card" onclick="addSlotMachine()"><span>+</span><span>슬롯머신 추가</span></div>
+  </div>
+</div>
+
+<!-- PVP -->
+<div class="tab-page" id="tabPvp">
+  <div class="pvp-box">
+    <div id="pvpContent">
+      <h2 style="color:#f1c40f;margin-bottom:.7rem">⚔️ 세븐 포커 대전</h2>
+      <p style="color:#aaa;font-size:.82rem;margin-bottom:1.2rem">4장 배분 → 1장 버리기 → 3차 베팅 → 7장 중 최선 5장 승부</p>
+      <button class="btn-primary" onclick="mpJoinQueue()">매칭 시작</button>
+    </div>
+    <div id="pvpGameArea" style="display:none">
+      <!-- Header row -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;background:rgba(0,0,0,.3);border-radius:10px;padding:.45rem .7rem">
+        <div id="pvpMyInfo" style="font-size:.85rem"></div>
+        <div id="pvpPot" style="color:#f1c40f;font-weight:bold;font-size:.9rem;text-align:center"></div>
+        <div id="pvpOpInfo" style="font-size:.85rem;text-align:right"></div>
+      </div>
+      <!-- Phase label -->
+      <div id="pvpPhaseLabel" style="text-align:center;color:#aaa;font-size:.78rem;margin-bottom:.4rem;background:rgba(0,0,0,.2);border-radius:6px;padding:.22rem .5rem"></div>
+      <!-- Opponent cards -->
+      <div id="pvpOpCards" style="display:flex;gap:.3rem;flex-wrap:wrap;min-height:88px;margin-bottom:.5rem;align-items:flex-end"></div>
+      <hr style="border:none;border-top:1px dashed rgba(255,255,255,.12);margin:.3rem 0">
+      <!-- My cards -->
+      <div id="pvpMyCards" style="display:flex;gap:.3rem;flex-wrap:wrap;min-height:88px;margin-bottom:.5rem;align-items:flex-end"></div>
+      <!-- Action area -->
+      <div id="pvpActionArea" style="text-align:center;margin-top:.4rem"></div>
+      <div id="pvpStatus" style="text-align:center;color:#888;font-size:.8rem;margin-top:.35rem"></div>
+    </div>
+  </div>
+</div>
+
+<!-- OVERLAYS -->
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-content">
+    <div class="result-title" id="resultTitle"></div>
+    <div class="result-amount" id="resultAmount"></div>
+    <div id="resultButtons" style="display:flex;gap:.7rem;justify-content:center;margin-top:1.3rem;flex-wrap:wrap">
+      <button class="skip-button" onclick="skipAnimation()">스킵 (Enter)</button>
+    </div>
+  </div>
+</div>
+
+<div class="result-overlay" id="doubleOverlay" style="z-index:2100;background:rgba(0,0,0,.94)">
+  <div class="result-content" style="width:min(480px,92vw)">
+    <div style="font-size:1.5rem;color:#f1c40f;font-weight:bold;margin-bottom:.3rem">🎰 더블업</div>
+    <div style="color:#aaa;font-size:.88rem;margin-bottom:1.1rem">다음 카드 >= 현재 카드면 승리!</div>
+    <div style="display:flex;justify-content:center;gap:1.3rem;align-items:center;margin-bottom:.9rem">
+      <div style="text-align:center"><div style="color:#aaa;font-size:.7rem;margin-bottom:.28rem">현재 카드</div><div id="doubleBaseCard" style="width:82px;height:115px;margin:0 auto;border-radius:8px;overflow:hidden"></div></div>
+      <div style="font-size:1.9rem;color:#555;font-weight:bold">VS</div>
+      <div style="text-align:center"><div style="color:#aaa;font-size:.7rem;margin-bottom:.28rem">다음 카드</div>
+        <div style="width:82px;height:115px;margin:0 auto;perspective:400px">
+          <div id="doubleNextCardInner" style="width:82px;height:115px;position:relative;transform-style:preserve-3d;transition:transform .65s ease-in-out">
+            <div id="doubleNextFront" style="position:absolute;width:100%;height:100%;backface-visibility:hidden;transform:rotateY(180deg);border-radius:8px;overflow:hidden"></div>
+            <div id="doubleNextBack" style="position:absolute;width:100%;height:100%;backface-visibility:hidden;border-radius:8px;overflow:hidden"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="doubleResultMsg" style="font-size:1.9rem;font-weight:bold;min-height:2.4rem;margin-bottom:.45rem"></div>
+    <div id="doublePot" style="font-size:1.2rem;color:#f1c40f;margin-bottom:1rem"></div>
+    <div id="doubleButtons" style="display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap"></div>
+  </div>
+</div>
+
+<div class="god-overlay" id="godOverlay">
+  <div class="god-content">
+    <div class="god-icon">✨👼✨</div>
+    <div class="god-message">불쌍해서 이거라도 준다 ㅋ</div>
+    <div class="god-message" id="godMsgAmount" style="font-size:1.25rem;margin-top:.7rem">+10 토큰</div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal-box">
+    <h2>🎰 엄지노</h2><p>닉네임과 비밀번호를 입력하세요</p>
+    <input class="modal-input" id="authNick" type="text" placeholder="닉네임 (최대 12자)" maxlength="12" style="margin-bottom:.55rem" autocomplete="username">
+    <input class="modal-input" id="authPass" type="password" placeholder="비밀번호 (4자 이상)" autocomplete="current-password" onkeydown="if(event.key==='Enter')authSubmit('login')">
+    <div class="modal-error" id="authError"></div>
+    <div class="modal-buttons">
+      <button class="btn-primary" id="authLoginBtn" onclick="authSubmit('login')">로그인</button>
+      <button class="btn-secondary" onclick="authSubmit('register')">회원가입</button>
+    </div>
+    <p style="margin-top:.7rem;font-size:.72rem;color:#444">계정에 게임 데이터가 저장됩니다</p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="bankModal" onclick="if(event.target===this)closeBank()">
+  <div class="bank-modal">
+    <h2>🏦 은행</h2>
+    <div class="bank-row"><span class="bank-label">내 잔액</span><span class="bank-value" id="bankHandChips">-</span></div>
+    <div class="bank-row"><span class="bank-label">은행 잔액</span><span class="bank-value" id="bankBalance">-</span></div>
+    <div class="bank-row"><span class="bank-label">이자율</span><span class="bank-value">1% / 일</span></div>
+    <div class="bank-row" id="bankUnlockRow" style="display:none"><span class="bank-label">출금 가능까지</span><span class="bank-value" id="bankUnlockTime">-</span></div>
+    <div class="bank-input-row"><input class="bank-input" id="bankDepositInput" type="text" placeholder="입금액"><button class="btn-bank" id="bankDepositBtn" onclick="bankDeposit()">입금</button></div>
+    <div class="bank-input-row" style="margin-top:.38rem"><button class="btn-bank btn-withdraw" id="bankWithdrawBtn" onclick="bankWithdraw()" style="width:100%">출금 (전액)</button></div>
+    <div class="bank-notice">입금 후 24시간 뒤 출금 가능 · 이자 1%/일</div>
+    <div style="margin-top:.7rem;text-align:center"><button class="btn-secondary" onclick="closeBank()">닫기</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="rankingModal" onclick="if(event.target===this)closeRanking()">
+  <div class="ranking-modal">
+    <h2>🏆 글로벌 랭킹</h2>
+    <div id="rankingContent"><div class="ranking-empty">불러오는 중...</div></div>
+    <div style="margin-top:.9rem"><button class="btn-secondary" onclick="closeRanking()">닫기</button></div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-msg" id="loadingMsg">로그인 중...</div>
+</div>
+
+<!-- JS 로드 순서 중요 -->
+<script src="./js/utils.js"></script>
+<script src="./js/core.js"></script>
+<script src="./js/poker.js"></script>
+<script src="./js/roulette.js"></script>
+<script src="./js/slot.js"></script>
+<script src="./js/stickman.js"></script>
+<script src="./js/pvp.js"></script>
+<script>
+// Prevent context menu on game elements (stops long-press text selection on mobile)
+document.addEventListener('contextmenu', e=>{
+  if(e.target.closest('.card,.mp-card,.mp-op-card,.chip-stack,.betting-zone,.rl-cell,.rl-outside-cell,.slot-grid'))
+    e.preventDefault();
+});
+// Prevent text selection on touch
+document.addEventListener('selectstart', e=>{
+  const el=e.target?.nodeType===1?e.target:e.target?.parentElement;
+  if(el?.closest('.card,.mp-card,.mp-op-card,.chip-stack,.main-area,.slot-grid'))
+    e.preventDefault();
+});
+document.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && document.getElementById('resultOverlay').classList.contains('show')) skipAnimation();
+});
+window.addEventListener('beforeunload', ()=>{
+  if(!sessionNickname||!sessionToken) return;
+  if(mpPollTimer) try{navigator.sendBeacon('/api/mp?action=leave', new Blob([JSON.stringify({nickname:sessionNickname,token:sessionToken})],{type:'application/json'}))}catch(e){}
+  if(rlPollTimer) try{navigator.sendBeacon('/api/roulette?action=leave', new Blob([JSON.stringify({nickname:sessionNickname,token:sessionToken})],{type:'application/json'}))}catch(e){}
+});
+
+(async function init(){
+  if(localStorage.getItem('musicEnabled')==='true'){
+    isMusicPlaying=true;
+    setTimeout(()=>{const m=document.getElementById('bgMusic');m.volume=0.5;m.play().catch(()=>{});document.getElementById('musicButton').textContent='🔊'},150);
+  }
+  drawRlWheel(0);
+  smAnimLoop();
+  slotMachines.push(createSlotMachineData());
+  renderSlotMachines();
+  if(loadSession()){
+    showLoading('접속 중...');
+    try{
+      const res=await fetchT(`${PLAYER_API}?action=load&nick=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`);
+      if(!res.ok) throw new Error('session invalid');
+      const data=await res.json();
+      nickname=sessionNickname;
+      applyServerState(data);
+      if(data.taxApplied) showTaxToast();
+    }catch(e){
+      clearSession();
+      document.getElementById('authModal').classList.add('show');
+      setTimeout(()=>document.getElementById('authNick').focus(),100);
+      chipDist=computeGreedyDist(chips);updateChipsDisplay();updateBetDisplay();updateStatsDisplay();
+    }finally{ hideLoading(); }
+  }else{
+    document.getElementById('authModal').classList.add('show');
+    setTimeout(()=>document.getElementById('authNick').focus(),100);
+    chipDist=computeGreedyDist(chips);updateChipsDisplay();updateBetDisplay();updateStatsDisplay();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,283 @@
+// ═══════════════════════════════════════════
+// core.js  –  state, network, auth, bank, ranking
+// ═══════════════════════════════════════════
+
+// ── Global state ────────────────────────────
+let deck=[],playerHand=[],selectedCards=[];
+let chips=10n,currentBet=0n,betTokens=[],chipDist={};
+let gamePhase='betting',animationTimeout,isAnimating=false,isMusicPlaying=false;
+let stats={maxChips:'10',maxWin:'0',bestHand:'-',bestHandPayout:0,totalGames:0,totalWins:0};
+let nickname=null,cancelTickets=0,preGameChips=0n,bankData=null;
+let pendingWin=0n,doubleBaseDeck=[],doubleBaseCard=null;
+const PLAYER_API='/api/player';
+let sessionNickname=null,sessionToken=null;
+
+// ── Tab music map ────────────────────────────
+const TAB_MUSIC={poker:'bgMusic',roulette:'bgMusicRoulette',slot:'bgMusicSlot',pvp:'bgMusic'};
+
+// ── Network ──────────────────────────────────
+async function fetchT(url,opts,ms){
+  const ctrl=new AbortController();
+  const tid=setTimeout(()=>ctrl.abort(),ms||8000);
+  try{return await fetch(url,{...(opts||{}),signal:ctrl.signal})}
+  finally{clearTimeout(tid)}
+}
+
+// ── Session ──────────────────────────────────
+function loadSession(){
+  const raw=localStorage.getItem('pkSession');if(!raw)return false;
+  try{const s=JSON.parse(raw);sessionNickname=s.n;sessionToken=s.t;return!!(s.n&&s.t)}catch{return false}
+}
+function saveSession(nick,tok){sessionNickname=nick;sessionToken=tok;localStorage.setItem('pkSession',JSON.stringify({n:nick,t:tok}));nickname=nick}
+function clearSession(){sessionNickname=null;sessionToken=null;localStorage.removeItem('pkSession');nickname=null}
+
+// ── Persist state ────────────────────────────
+let _saveTimer=null;
+function saveState(){
+  localStorage.setItem('pkBet',currentBet.toString());
+  localStorage.setItem('pkBetTokens',JSON.stringify(betTokens));
+  localStorage.setItem('pkPhase',gamePhase);
+  if(playerHand.length)localStorage.setItem('pkHand',JSON.stringify(playerHand));
+  else localStorage.removeItem('pkHand');
+  if(!sessionNickname||!sessionToken)return;
+  clearTimeout(_saveTimer);_saveTimer=setTimeout(_saveToAPI,800);
+}
+async function _saveToAPI(){
+  if(!sessionNickname||!sessionToken)return;
+  try{await fetchT(PLAYER_API+'?action=save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:sessionNickname,token:sessionToken,chips:chips.toString(),stats,cancelTickets})})}catch(e){}
+}
+function saveStats(){
+  // Always update maxChips before saving
+  const total=chips+currentBet;
+  if(cmpBigStr(total.toString(),stats.maxChips||'0')>0) stats.maxChips=total.toString();
+  updateStatsDisplay();saveState();
+}
+
+// ── Loading overlay ──────────────────────────
+function showLoading(m){document.getElementById('loadingMsg').textContent=m||'...';document.getElementById('loadingOverlay').style.display='flex'}
+function hideLoading(){document.getElementById('loadingOverlay').style.display='none'}
+function showTaxToast(){}
+
+// ── Tab switching ────────────────────────────
+let currentTab='poker';
+function switchTab(name){
+  if(currentTab===name)return;sfxTabSwitch();
+  if(isMusicPlaying){
+    document.getElementById(TAB_MUSIC[currentTab]||'bgMusic').pause();
+    const nm=document.getElementById(TAB_MUSIC[name]||'bgMusic');
+    nm.volume=0.5;nm.play().catch(()=>{});
+  }
+  document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab'+name[0].toUpperCase()+name.slice(1)).classList.add('active');
+  document.querySelectorAll('.nav-tab')[['poker','roulette','slot','pvp'].indexOf(name)].classList.add('active');
+  currentTab=name;
+  if(name==='roulette'){buildRlTable();updateRlChipRow();if(rlJoined)rlStartPolling();}
+  if(name==='slot')updateSlotChipsDisplay();
+}
+
+// ── Music ────────────────────────────────────
+function toggleMusic(){
+  const btn=document.getElementById('musicButton');
+  if(isMusicPlaying){
+    document.querySelectorAll('audio').forEach(a=>a.pause());
+    btn.textContent='🔇';isMusicPlaying=false;localStorage.setItem('musicEnabled','false');
+  }else{
+    const m=document.getElementById(TAB_MUSIC[currentTab]||'bgMusic');
+    m.volume=0.5;m.play().catch(()=>{});
+    btn.textContent='🔊';isMusicPlaying=true;localStorage.setItem('musicEnabled','true');
+  }
+}
+
+// ── Chip distribution ────────────────────────
+function computeGreedyDist(total){let rem=total,dist={};for(let i=chipTypes.length-1;i>=0;i--){const cv=chipTypes[i].value,k=cv.toString();dist[k]=rem/cv;rem=rem%cv;}return dist}
+function makeChange(ti){
+  const tk=chipTypes[ti].value.toString();if((chipDist[tk]||0n)>0n)return true;
+  for(let j=ti+1;j<chipTypes.length;j++){const jk=chipTypes[j].value.toString();if((chipDist[jk]||0n)>0n){chipDist[jk]-=1n;chipDist[chipTypes[j-1].value.toString()]=(chipDist[chipTypes[j-1].value.toString()]||0n)+10n;return makeChange(ti);}}
+  return false;
+}
+function updateChipsDisplay(){
+  const cont=document.getElementById('chipsContainer');cont.innerHTML='';
+  // God blessing: only when truly broke AND on poker tab AND nothing is pending anywhere
+  const hasPendingAnywhere=currentBet>0n
+    ||(typeof rlTotalPending!=='undefined'&&rlTotalPending>0n)
+    ||(typeof slotMachines!=='undefined'&&slotMachines.some&&slotMachines.some(m=>m.busy));
+  const onPokerTab=(typeof currentTab==='undefined')||currentTab==='poker';
+  if(chips===0n&&!isAnimating&&!hasPendingAnywhere&&gamePhase==='betting'&&onPokerTab){
+    if(!document.getElementById('authModal').classList.contains('show'))showGodBlessing();return;
+  }
+  for(let i=chipTypes.length-1;i>=0;i--){
+    const chip=chipTypes[i],cnt=chipDist[chip.value.toString()]||0n;if(cnt<=0n)continue;
+    const s=document.createElement('div');s.className='chip-stack';s.innerHTML=createChipSVG(chip);
+    s.title=formatBig(chip.value)+' × '+cnt;
+    if(cnt>1n){const b=document.createElement('div');b.className='chip-count';b.textContent=cnt>99n?'99+':cnt.toString();s.appendChild(b);}
+    const c2=chip;
+    s.onclick=e=>throwChip(c2,e);
+    s.addEventListener('touchend',e=>{e.preventDefault();throwChip(c2,e.changedTouches[0])},{passive:false});
+    cont.appendChild(s);
+  }
+}
+function updateBetDisplay(){document.getElementById('betAmount').textContent=shortFmt(currentBet)}
+function updateSlotChipsDisplay(){const el=document.getElementById('slotMyChips');if(el)el.textContent=shortFmt(chips)+' 칩'}
+function updateRlChipRow(){
+  const row=document.getElementById('rlChipRow');if(!row)return;row.innerHTML='';
+  for(let i=chipTypes.length-1;i>=0;i--){
+    const chip=chipTypes[i],cnt=chipDist[chip.value.toString()]||0n;if(cnt<=0n)continue;
+    const s=document.createElement('div');s.className='chip-stack';s.innerHTML=createChipSVG(chip);
+    s.title=formatBig(chip.value)+' × '+cnt;
+    if(cnt>1n){const b=document.createElement('div');b.className='chip-count';b.textContent=cnt>99n?'99+':cnt.toString();s.appendChild(b);}
+    const c2=chip;
+    s.onclick=(e)=>rlSelectChip(c2,e.currentTarget||s);
+    s.addEventListener('touchend', e=>{e.preventDefault();rlSelectChip(c2,s)},{passive:false});
+    row.appendChild(s);
+  }
+}
+function updateStatsDisplay(){
+  document.getElementById('maxChips').textContent=shortFmt(BigInt(stats.maxChips||'0'));
+  document.getElementById('maxWin').textContent=shortFmt(BigInt(stats.maxWin||'0'));
+  document.getElementById('bestHand').textContent=stats.bestHand||'-';
+  const tg=Number(stats.totalGames)||0,tw=Number(stats.totalWins)||0;
+  document.getElementById('totalGames').textContent=tg;
+  document.getElementById('totalWins').textContent=tw;
+  document.getElementById('winRate').textContent=(tg>0?((tw/tg)*100).toFixed(1):'0')+'%';
+}
+
+// ── Auth ─────────────────────────────────────
+async function authSubmit(mode){
+  const nick=document.getElementById('authNick').value.trim(),pass=document.getElementById('authPass').value;
+  const errEl=document.getElementById('authError');errEl.textContent='';
+  if(!nick){errEl.textContent='닉네임을 입력하세요';return}
+  if(!pass||pass.length<4){errEl.textContent='비밀번호 4자 이상';return}
+  document.getElementById('authLoginBtn').disabled=true;
+  showLoading(mode==='login'?'로그인 중...':'계정 생성 중...');
+  try{
+    const res=await fetchT(PLAYER_API+'?action='+mode,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:nick,password:pass})});
+    const data=await res.json();
+    if(!res.ok){errEl.textContent=data.error||'오류';document.getElementById('authLoginBtn').disabled=false;return}
+    saveSession(nick,data.token);
+    document.getElementById('authModal').classList.remove('show');
+    applyServerState(data);
+  }catch(e){errEl.textContent=e.name==='AbortError'?'응답 없음':'서버 연결 실패';document.getElementById('authLoginBtn').disabled=false}
+  finally{hideLoading()}
+}
+
+function applyServerState(data){
+  chips=BigInt(data.chips||'10');
+  if(data.stats){const s=data.stats;stats={maxChips:s.maxChips||chips.toString(),maxWin:s.maxWin||'0',bestHand:s.bestHand||'-',bestHandPayout:s.bestHandPayout||0,totalGames:s.totalGames||0,totalWins:s.totalWins||0}}
+  bankData=data.bank||null;
+  if(typeof data.cancelTickets==='number')cancelTickets=data.cancelTickets;
+  currentBet=BigInt(localStorage.getItem('pkBet')||'0');
+  betTokens=JSON.parse(localStorage.getItem('pkBetTokens')||'[]');
+  gamePhase=localStorage.getItem('pkPhase')||'betting';
+  playerHand=JSON.parse(localStorage.getItem('pkHand')||'null')||[];
+  chipDist=computeGreedyDist(chips);
+  updateChipsDisplay();updateBetDisplay();updateStatsDisplay();updateTicketUI();updateSlotChipsDisplay();updateRlChipRow();
+  restoreGameUI();restoreBetDisplay();
+  startPresence();
+}
+
+function restoreGameUI(){
+  if(gamePhase==='dealt'){
+    document.getElementById('dealButton').disabled=true;
+    document.getElementById('drawButton').disabled=false;
+    displayCards();updateGameTicketBtn();
+  }else if(gamePhase==='drawn'){
+    // drawn but page refreshed - reset to betting since we can't continue without deck state
+    gamePhase='betting';currentBet=0n;betTokens=[];
+    chips=BigInt(localStorage.getItem('pkChipsBeforeDeal')||chips.toString());
+    chipDist=computeGreedyDist(chips);
+    localStorage.removeItem('pkHand');playerHand=[];
+    document.getElementById('dealButton').disabled=false;
+    document.getElementById('drawButton').disabled=true;
+    displayCards();saveState();
+  }else{
+    gamePhase='betting';
+    // If betTokens exist but no hand, restore chips from pre-bet state
+    if(betTokens.length>0&&playerHand.length===0){
+      chips+=currentBet;currentBet=0n;betTokens=[];
+      chipDist=computeGreedyDist(chips);
+      document.getElementById('bettingZone').querySelectorAll('.bet-token').forEach(t=>t.remove());
+      saveState();
+    }
+    document.getElementById('dealButton').disabled=false;
+    document.getElementById('drawButton').disabled=true;
+    displayCards();
+  }
+}
+function restoreBetDisplay(){
+  if(!betTokens.length)return;
+  const bz=document.getElementById('bettingZone'),bRect=bz.getBoundingClientRect();
+  betTokens.forEach((chipIdx,i)=>{
+    const chip=chipTypes[chipIdx];if(!chip)return;
+    const bt=document.createElement('div');bt.className='bet-token';bt.innerHTML=createChipSVG(chip);
+    const angle=(i/Math.max(betTokens.length,1))*Math.PI*2;
+    const rx=bRect.width/2-22+Math.cos(angle)*Math.min(36,betTokens.length*3);
+    const ry=bRect.height/2-22+Math.sin(angle)*Math.min(22,betTokens.length*2);
+    bt.style.cssText=`width:44px;height:44px;left:${rx}px;top:${ry}px`;
+    bz.appendChild(bt);
+  });
+}
+
+async function reloadMyChips(){
+  if(!sessionNickname||!sessionToken)return;
+  try{
+    const res=await fetchT(`${PLAYER_API}?action=load&nick=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`);
+    if(res.ok){const data=await res.json();chips=BigInt(data.chips||'10');chipDist=computeGreedyDist(chips);updateChipsDisplay();updateBetDisplay();updateSlotChipsDisplay();updateRlChipRow();}
+  }catch(e){}
+}
+
+// ── Bank ─────────────────────────────────────
+function showBank(){if(!sessionNickname){document.getElementById('authModal').classList.add('show');return}refreshBankUI();document.getElementById('bankModal').classList.add('show')}
+function closeBank(){document.getElementById('bankModal').classList.remove('show')}
+function refreshBankUI(){
+  document.getElementById('bankHandChips').textContent=formatBig(chips)+' 칩';
+  const bamt=bankData?.amount?BigInt(bankData.amount):0n;
+  document.getElementById('bankBalance').textContent=formatBig(bamt)+' 칩';
+  const unlockRow=document.getElementById('bankUnlockRow'),wdBtn=document.getElementById('bankWithdrawBtn');
+  if(bankData?.depositedAt){
+    const ms=Date.now()-new Date(bankData.depositedAt).getTime();
+    if(ms<86400000){const hrs=Math.ceil((86400000-ms)/3600000);unlockRow.style.display='flex';document.getElementById('bankUnlockTime').textContent=hrs+'시간 후';wdBtn.disabled=true;wdBtn.textContent=`출금 불가 (${hrs}h)`;}
+    else{unlockRow.style.display='none';wdBtn.disabled=bamt===0n;wdBtn.textContent='출금 (전액)';}
+  }else{unlockRow.style.display='none';wdBtn.disabled=true;wdBtn.textContent='출금 (잔액 없음)';}
+}
+async function bankDeposit(){
+  const raw=document.getElementById('bankDepositInput').value.trim();if(!raw)return;
+  let amt;try{amt=BigInt(raw)}catch{alert('숫자 입력');return}
+  if(amt<=0n||amt>chips){alert('잔액 부족');return}
+  const btn=document.getElementById('bankDepositBtn');btn.disabled=true;
+  try{
+    const res=await fetchT(PLAYER_API+'?action=bank-deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:sessionNickname,token:sessionToken,amount:amt.toString()})});
+    const data=await res.json();if(!res.ok){alert(data.error||'오류');btn.disabled=false;return}
+    chips=BigInt(data.chips);bankData=data.bank;chipDist=computeGreedyDist(chips);
+    document.getElementById('bankDepositInput').value='';sfxChip();updateChipsDisplay();updateBetDisplay();refreshBankUI();
+  }catch(e){alert('서버 오류')}btn.disabled=false;
+}
+async function bankWithdraw(){
+  const btn=document.getElementById('bankWithdrawBtn');btn.disabled=true;
+  try{
+    const res=await fetchT(PLAYER_API+'?action=bank-withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:sessionNickname,token:sessionToken})});
+    const data=await res.json();if(!res.ok){alert(data.error||'오류');btn.disabled=false;return}
+    chips=BigInt(data.chips);bankData=null;chipDist=computeGreedyDist(chips);sfxWin();updateChipsDisplay();updateBetDisplay();refreshBankUI();
+  }catch(e){alert('서버 오류');btn.disabled=false}
+}
+
+// ── Ranking ──────────────────────────────────
+async function showRanking(){
+  document.getElementById('rankingModal').classList.add('show');
+  document.getElementById('rankingContent').innerHTML='<div class="ranking-empty">불러오는 중...</div>';
+  try{
+    const res=await fetch('/api/ranking'+(nickname?'?nick='+encodeURIComponent(nickname):''));
+    const data=await res.json();
+    const rows=data.top100||data,surrounding=data.surrounding||[],userRank=data.userRank||0;
+    if(!Array.isArray(rows)||!rows.length){document.getElementById('rankingContent').innerHTML='<div class="ranking-empty">아직 랭킹 없음</div>';return}
+    const medals=['🥇','🥈','🥉'];
+    const rr=row=>{const isMe=nickname&&row.nickname===nickname,medal=row.rank<=3?medals[row.rank-1]:'';return`<tr class="rank-${row.rank}${isMe?' me-row':''}"><td>${medal}${row.rank}</td><td>${escHtml(row.nickname)}${isMe?' 👈':''}</td><td>${shortFmt(BigInt(row.maxChips||'0'))}</td></tr>`};
+    let html='<table class="ranking-table"><thead><tr><th>순위</th><th>닉네임</th><th>최고 칩</th></tr></thead><tbody>';
+    rows.forEach(row=>html+=rr(row));
+    if(surrounding.length&&userRank>100){html+=`<tr><td colspan="3" style="text-align:center;color:#444;font-size:.78rem">・・・</td></tr>`;surrounding.forEach(row=>html+=rr(row));}
+    html+='</tbody></table>';
+    if(userRank>0)html+=`<div style="margin-top:.55rem;font-size:.78rem;color:#aaa">내 순위: ${userRank}위</div>`;
+    document.getElementById('rankingContent').innerHTML=html;
+  }catch(e){document.getElementById('rankingContent').innerHTML='<div class="ranking-empty">불러올 수 없음</div>'}
+}
+function closeRanking(){document.getElementById('rankingModal').classList.remove('show')}
