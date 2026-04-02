@@ -67,7 +67,6 @@ function formatBig(n) {
 function shortFmt(n) {
   if (n < 0n) return '-' + shortFmt(-n);
   if (n >= PLUS1) {
-    // 몇 +인지 계산
     let plusCount = 0, div = PLUS1;
     while (n >= div) { plusCount++; div *= PLUS1; }
     let divisor = 1n;
@@ -77,7 +76,10 @@ function shortFmt(n) {
     return shortFmt(q) + plusStr;
   }
   if (n < 10000n) return n.toString();
-  for (const [v, nm] of FMT_UNITS) if (n >= v) return (n/v) + '' + nm + ((n%v > 0n) ? '+' : '');
+  for (const [v, nm] of FMT_UNITS) if (n >= v) {
+    const q = n / v;
+    return (n % v > 0n ? '약 ' : '') + q + nm;
+  }
   return n.toString();
 }
 function lightenHex(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'#'+[Math.min(255,r+a),Math.min(255,g+a),Math.min(255,b+a)].map(v=>v.toString(16).padStart(2,'0')).join('')}
