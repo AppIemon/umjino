@@ -96,9 +96,31 @@ function makeChange(ti){
   for(let j=ti+1;j<chipTypes.length;j++){const jk=chipTypes[j].value.toString();if((chipDist[jk]||0n)>0n){chipDist[jk]-=1n;chipDist[chipTypes[j-1].value.toString()]=(chipDist[chipTypes[j-1].value.toString()]||0n)+10n;return makeChange(ti);}}
   return false;
 }
+// 보유 칩 중 표시할 슬롯 목록 반환 (상위 10개, + / ++ 우선)
+function getDisplayChips() {
+  // 보유한 칩 종류 전부 (값 내림차순)
+  const have = [];
+  for (let i = chipTypes.length - 1; i >= 0; i--) {
+    const chip = chipTypes[i], cnt = chipDist[chip.value.toString()] || 0n;
+    if (cnt > 0n) have.push({ chip, cnt });
+  }
+  if (have.length <= 10) return have;
+
+  // 상위 10개만 (이미 내림차순)
+  return have.slice(0, 10);
+}
+
+function _makeChipStack(chip, cnt, onClickFn) {
+  const s = document.createElement('div'); s.className = 'chip-stack'; s.innerHTML = createChipSVG(chip);
+  s.title = formatBig(chip.value) + ' × ' + cnt;
+  if (cnt > 1n) { const b = document.createElement('div'); b.className = 'chip-count'; b.textContent = cnt > 99n ? '99+' : cnt.toString(); s.appendChild(b); }
+  s.onclick = e => onClickFn(chip, e);
+  s.addEventListener('touchend', e => { e.preventDefault(); onClickFn(chip, e.changedTouches?.[0] || e); }, { passive: false });
+  return s;
+}
+
 function updateChipsDisplay(){
   const cont=document.getElementById('chipsContainer');cont.innerHTML='';
-  // God blessing: only when truly broke AND on poker tab AND nothing is pending anywhere
   const hasPendingAnywhere=currentBet>0n
     ||(typeof rlTotalPending!=='undefined'&&rlTotalPending>0n)
     ||(typeof slotMachines!=='undefined'&&slotMachines.some&&slotMachines.some(m=>m.busy));
@@ -106,17 +128,11 @@ function updateChipsDisplay(){
   if(chips===0n&&!isAnimating&&!hasPendingAnywhere&&gamePhase==='betting'&&onPokerTab){
     if(!document.getElementById('authModal').classList.contains('show'))showGodBlessing();return;
   }
-  for(let i=chipTypes.length-1;i>=0;i--){
-    const chip=chipTypes[i],cnt=chipDist[chip.value.toString()]||0n;if(cnt<=0n)continue;
-    const s=document.createElement('div');s.className='chip-stack';s.innerHTML=createChipSVG(chip);
-    s.title=formatBig(chip.value)+' × '+cnt;
-    if(cnt>1n){const b=document.createElement('div');b.className='chip-count';b.textContent=cnt>99n?'99+':cnt.toString();s.appendChild(b);}
-    const c2=chip;
-    s.onclick=e=>throwChip(c2,e);
-    s.addEventListener('touchend',e=>{e.preventDefault();throwChip(c2,e.changedTouches[0])},{passive:false});
-    cont.appendChild(s);
-  }
+  getDisplayChips().forEach(({chip, cnt}) => {
+    cont.appendChild(_makeChipStack(chip, cnt, throwChip));
+  });
 }
+
 function updateBetDisplay(){document.getElementById('betAmount').textContent=shortFmt(currentBet)}
 function updateSlotChipsDisplay(){
   const el=document.getElementById('slotMyChips');if(el)el.textContent=shortFmt(chips)+' 칩';
@@ -124,16 +140,10 @@ function updateSlotChipsDisplay(){
 }
 function updateRlChipRow(){
   const row=document.getElementById('rlChipRow');if(!row)return;row.innerHTML='';
-  for(let i=chipTypes.length-1;i>=0;i--){
-    const chip=chipTypes[i],cnt=chipDist[chip.value.toString()]||0n;if(cnt<=0n)continue;
-    const s=document.createElement('div');s.className='chip-stack';s.innerHTML=createChipSVG(chip);
-    s.title=formatBig(chip.value)+' × '+cnt;
-    if(cnt>1n){const b=document.createElement('div');b.className='chip-count';b.textContent=cnt>99n?'99+':cnt.toString();s.appendChild(b);}
-    const c2=chip;
-    s.onclick=(e)=>rlSelectChip(c2,e.currentTarget||s);
-    s.addEventListener('touchend', e=>{e.preventDefault();rlSelectChip(c2,s)},{passive:false});
+  getDisplayChips().forEach(({chip,cnt})=>{
+    const s=_makeChipStack(chip,cnt,(c,e)=>rlSelectChip(c,e?.currentTarget||row));
     row.appendChild(s);
-  }
+  });
 }
 function updateStatsDisplay(){
   document.getElementById('maxChips').textContent=shortFmt(BigInt(stats.maxChips||'0'));
