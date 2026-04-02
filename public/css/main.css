@@ -185,15 +185,14 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .slot-header{background:rgba(0,0,0,.68);padding:.55rem .9rem;border-bottom:2px solid rgba(241,196,15,.22);display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;flex-shrink:0;position:sticky;top:0;z-index:10}
 .slot-my-chips{color:#f1c40f;font-size:.88rem;font-weight:bold;white-space:nowrap}
 .slot-machines-area{display:flex;flex-wrap:wrap;gap:.9rem;padding:.9rem;align-content:flex-start}
-.slot-machine{background:rgba(0,0,0,.58);border:2px solid rgba(241,196,15,.28);border-radius:15px;padding:.85rem;min-width:295px;flex:1 1 295px;max-width:420px;display:flex;flex-direction:column;gap:.45rem}
-.slot-machine.double-mode{border-color:rgba(231,76,60,.7);box-shadow:0 0 18px rgba(231,76,60,.22)}
+.slot-shared-ctrl{width:100%;background:rgba(0,0,0,.6);border:2px solid rgba(241,196,15,.35);border-radius:12px;padding:.65rem .85rem}
+.slot-shared-row{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.slot-chip-label{color:#f1c40f;font-size:.85rem;font-weight:bold;white-space:nowrap}
+.slot-add-btn{background:rgba(46,204,113,.15);border:1px solid rgba(46,204,113,.4);color:#2ecc71;padding:.35rem .7rem;border-radius:7px;font-size:.78rem;font-weight:bold;cursor:pointer;white-space:nowrap;transition:all .18s}
+.slot-add-btn:hover{background:rgba(46,204,113,.28)}
+.slot-machine{background:rgba(0,0,0,.58);border:2px solid rgba(241,196,15,.28);border-radius:15px;padding:.85rem;min-width:280px;flex:1 1 280px;max-width:400px;display:flex;flex-direction:column;gap:.42rem}
 .slot-machine-hdr{display:flex;justify-content:space-between;align-items:center;gap:.4rem}
 .slot-machine-name{color:#f1c40f;font-size:.88rem;font-weight:bold}
-.slot-dbl-badge{background:#e74c3c;color:white;padding:.07rem .38rem;border-radius:9px;font-size:.62rem;font-weight:bold;display:none}
-.slot-machine.double-mode .slot-dbl-badge{display:inline}
-.slot-dbl-turns{color:#e74c3c;font-size:.65rem;font-weight:bold;display:none}
-.slot-machine.double-mode .slot-dbl-turns{display:inline}
-.slot-hdr-right{display:flex;align-items:center;gap:.35rem}
 .slot-close-btn{background:rgba(255,255,255,.08);border:none;color:#888;cursor:pointer;border-radius:5px;width:20px;height:20px;font-size:.75rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .slot-close-btn:hover{color:white;background:rgba(231,76,60,.35)}
 .slot-grid{display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,1fr);gap:3px;background:rgba(0,0,0,.48);border-radius:9px;padding:.38rem;border:2px solid rgba(241,196,15,.18)}
@@ -203,14 +202,12 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .slot-cell.win3{background:rgba(46,204,113,.18);border-color:#2ecc71;box-shadow:0 0 7px rgba(46,204,113,.35)}
 .slot-cell.win4{background:rgba(52,152,219,.2);border-color:#3498db;box-shadow:0 0 7px rgba(52,152,219,.38)}
 .slot-cell.win5{background:rgba(155,89,182,.22);border-color:#9b59b6;box-shadow:0 0 8px rgba(155,89,182,.45)}
-.slot-winlines{display:flex;flex-wrap:wrap;gap:.2rem;min-height:1.3rem}
+.slot-winlines{display:flex;flex-wrap:wrap;gap:.2rem;min-height:1.2rem}
 .slot-win-tag{background:rgba(46,204,113,.18);border:1px solid #2ecc71;color:#2ecc71;border-radius:5px;padding:.06rem .32rem;font-size:.66rem}
-.slot-controls{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
 .slot-bet-inp{flex:1;min-width:75px;padding:.35rem .5rem;background:rgba(255,255,255,.09);border:1.5px solid rgba(241,196,15,.32);border-radius:7px;color:white;font-size:.84rem;outline:none;text-align:center}
 .slot-bet-inp:focus{border-color:#f1c40f}
-.slot-spin-btn{background:linear-gradient(135deg,#f1c40f,#e67e22);color:#111;border:none;padding:.35rem .85rem;border-radius:7px;font-weight:bold;cursor:pointer;font-size:.84rem;transition:all .18s;white-space:nowrap}
+.slot-spin-btn{background:linear-gradient(135deg,#f1c40f,#e67e22);color:#111;border:none;padding:.38rem .95rem;border-radius:7px;font-weight:bold;cursor:pointer;font-size:.9rem;transition:all .18s;white-space:nowrap}
 .slot-spin-btn:hover:not(:disabled){transform:scale(1.05)}.slot-spin-btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.slot-dbl-info{font-size:.7rem;color:#e74c3c;font-weight:bold;text-align:center;min-height:1rem}
 .slot-result-msg{font-size:.8rem;font-weight:bold;color:#f1c40f;text-align:center;min-height:1.1rem}
 .slot-paytable-mini{display:grid;grid-template-columns:1fr auto;gap:.1rem .38rem;font-size:.6rem;background:rgba(0,0,0,.32);padding:.32rem .45rem;border-radius:6px}
 .spm-sym{color:#ccc}.spm-val{color:#f1c40f;font-weight:bold;text-align:right}

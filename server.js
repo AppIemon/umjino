@@ -701,10 +701,11 @@ app.post('/api/mp', async (req, res) => {
       const pidx = game.players[0].nickname===nickname?0:1;
       if (game.setter !== pidx) return res.status(400).json({ error: '권한 없음' });
 
-      // baseBet is derived from minChips/50, not user input
+      // baseBet is derived from minChips/50, minimum 1000
       const minChips = cmpBigStr(game.players[0].chips, game.players[1].chips) <= 0
         ? BigInt(game.players[0].chips) : BigInt(game.players[1].chips);
-      const baseBet = minChips / 50n > 0n ? minChips / 50n : 1n;
+      const rawBet = minChips / 50n > 0n ? minChips / 50n : 1n;
+      const baseBet = rawBet < 1000n ? 1000n : rawBet;
 
       // Both players pay the ante (baseBet each)
       const p0 = await db.collection('players').findOne({nickname:game.players[0].nickname});

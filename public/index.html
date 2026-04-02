@@ -265,8 +265,7 @@ window.addEventListener('beforeunload', ()=>{
   }
   drawRlWheel(0);
   smAnimLoop();
-  slotMachines.push(createSlotMachineData());
-  renderSlotMachines();
+  initSlot();
   if(loadSession()){
     showLoading('접속 중...');
     try{

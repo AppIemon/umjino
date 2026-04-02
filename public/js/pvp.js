@@ -147,21 +147,37 @@ function mpActionHTML(d){
     if(!isMyTurn)return`<p style="color:#aaa;font-size:.8rem">상대 베팅 중...</p>`;
     const callNeed=(roundHighBet||0)-(myRoundPaid||0);
     const canCheck=callNeed===0;
-    const unitStr=baseNum?shortFmt(BigInt(baseBet)):'?';
+    const pot=d.pot?BigInt(d.pot):0n;
+    const base=baseBet?BigInt(baseBet):1n;
+
+    // 버튼별 금액 계산 (단위 기준)
+    const halfUnits=Math.max(1,Math.round(Number(pot/base)/2));
+    const quarterUnits=Math.max(1,Math.round(Number(pot/base)/4));
+    const fullUnits=Number(pot/base);
+    const callUnits=callNeed;
+
+    const betBtn=(label,units,color,title)=>{
+      const disabled=units<=0&&!canCheck;
+      return`<button
+        title="${title||''}"
+        onclick="mpBetAction('${units===callUnits?'call':'raise'}',${units})"
+        style="background:${color};color:${color.includes('rgba')?'#e74c3c':'white'};border:${color.includes('rgba')?'1px solid rgba(231,76,60,.5)':'none'};padding:.42rem .75rem;border-radius:8px;font-weight:bold;cursor:pointer;font-size:.78rem;touch-action:manipulation;white-space:nowrap${disabled?';opacity:.4;cursor:not-allowed':''}"
+        ${disabled?'disabled':''}>${label}</button>`;
+    };
+
     return`<div>
-<div style="font-size:.68rem;color:#888;margin-bottom:.35rem">현재 최고: ${roundHighBet||0}단위 · 내가 낸 것: ${myRoundPaid||0}단위 · 단위=${unitStr}칩</div>
-<div style="display:flex;gap:.35rem;justify-content:center;flex-wrap:wrap">
-  <button onclick="mpBetAction('call')" style="background:linear-gradient(135deg,#27ae60,#1e8449);color:white;border:none;padding:.4rem .9rem;border-radius:8px;font-weight:bold;cursor:pointer;font-size:.8rem;touch-action:manipulation">${canCheck?'체크':'콜 (+'+callNeed+'단위)'}</button>
-  <button onclick="mpToggleRaiseBox()" style="background:linear-gradient(135deg,#3498db,#2980b9);color:white;border:none;padding:.4rem .9rem;border-radius:8px;font-weight:bold;cursor:pointer;font-size:.8rem;touch-action:manipulation">레이즈 ↑</button>
-  <button onclick="mpBetAction('fold')" style="background:rgba(231,76,60,.2);color:#e74c3c;border:1px solid rgba(231,76,60,.45);padding:.4rem .9rem;border-radius:8px;font-weight:bold;cursor:pointer;font-size:.8rem;touch-action:manipulation">폴드 ✗</button>
-</div>
-<div id="pvpRaiseBox" style="display:none;margin-top:.35rem">
-  <span style="color:#aaa;font-size:.78rem">레이즈 배수: </span>
-  <input type="number" id="pvpRaiseUnits" min="1" value="1" style="padding:.35rem .5rem;background:rgba(255,255,255,.09);border:1px solid rgba(241,196,15,.35);border-radius:7px;color:white;font-size:.9rem;text-align:center;width:60px;outline:none">
-  <span style="color:#aaa;font-size:.78rem"> × ${unitStr}칩</span>
-  <button onclick="mpBetAction('raise')" style="background:linear-gradient(135deg,#f1c40f,#e67e22);color:#111;border:none;padding:.38rem .75rem;border-radius:7px;font-weight:bold;cursor:pointer;font-size:.8rem;margin-left:.3rem;touch-action:manipulation">레이즈</button>
+<div style="font-size:.65rem;color:#777;margin-bottom:.3rem">단위 ${shortFmt(base)}칩 · 팟 ${shortFmt(pot)}칩</div>
+<div style="display:flex;gap:.3rem;justify-content:center;flex-wrap:wrap">
+  ${canCheck
+    ? betBtn('체크 ✓', 0, 'linear-gradient(135deg,#27ae60,#1e8449)', '추가 베팅 없이 넘기기')
+    : betBtn(`콜 +${callUnits}단위`, callUnits, 'linear-gradient(135deg,#27ae60,#1e8449)', `상대 베팅 따라가기 (+${shortFmt(base*BigInt(callUnits))}칩)`)}
+  ${betBtn('풀 '+fullUnits+'단위', fullUnits, 'linear-gradient(135deg,#e67e22,#d35400)', `팟 전액 레이즈 (+${shortFmt(base*BigInt(fullUnits))}칩)`)}
+  ${betBtn('하프 '+halfUnits+'단위', halfUnits, 'linear-gradient(135deg,#3498db,#2980b9)', `팟 절반 레이즈 (+${shortFmt(base*BigInt(halfUnits))}칩)`)}
+  ${betBtn('쿼터 '+quarterUnits+'단위', quarterUnits, 'linear-gradient(135deg,#8e44ad,#6c3483)', `팟 1/4 레이즈 (+${shortFmt(base*BigInt(quarterUnits))}칩)`)}
+  ${betBtn('다이 ✗', -1, 'rgba(231,76,60,.15)', '폴드 (이번 판 포기)')}
 </div>
 </div>`;
+  }
   }
   return'';
 }
@@ -202,11 +218,13 @@ async function mpConfirmDiscard(){
   catch(e){alert('서버 오류')}
 }
 
-function mpToggleRaiseBox(){const b=document.getElementById('pvpRaiseBox');if(b)b.style.display=b.style.display==='none'?'':'none'}
 
-async function mpBetAction(act){
-  const raiseUnits=parseInt(document.getElementById('pvpRaiseUnits')?.value)||1;
-  try{const res=await mpFetch('bet_action',{betAction:act,raiseUnits});const d=await res.json();
+
+
+async function mpBetAction(act, units){
+  const raiseUnits = (act === 'raise' && units > 0) ? units : (parseInt(units) || 1);
+  const finalAct = (act === 'raise' && units === -1) ? 'fold' : act;
+  try{const res=await mpFetch('bet_action',{betAction:finalAct,raiseUnits});const d=await res.json();
     if(!res.ok){alert(d.error||'오류');return}mpHandleState(d);mpLastState=d;}
   catch(e){alert('서버 오류')}
 }

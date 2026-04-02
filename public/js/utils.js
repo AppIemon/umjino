@@ -25,8 +25,61 @@ const FMT_UNITS=[
   [pow10(32),'구'],[pow10(28),'양'],[pow10(24),'자'],[pow10(20),'해'],[pow10(16),'경'],
   [pow10(12),'조'],[pow10(8),'억'],[pow10(4),'만'],[pow10(3),'천'],
 ];
-function formatBig(n){if(n===0n)return'0';if(n<10000n)return n.toString();let r=n,p=[];for(const[v,nm]of FMT_UNITS)if(r>=v){p.push(r/v+nm);r=r%v;}if(r>0n)p.push(r.toString());return p.join(' ')}
-function shortFmt(n){if(n<10000n)return n.toString();for(const[v,nm]of FMT_UNITS)if(n>=v)return(n/v)+''+nm+((n%v>0n)?'+':'');return n.toString()}
+
+// 무량대수 단위 (10^68)
+const MURYANGDAESU = pow10(68);
+// 1+ = 10000무량대수 = 10^72
+const PLUS1 = pow10(72);
+
+// + 표기: 1+ = 10^72, 1++ = 10^76 등
+function plusNotation(n) {
+  // n >= 10^72
+  let rem = n, plusCount = 0, base = 1n;
+  // 몇 번 10^72를 나눌 수 있는지
+  let div = PLUS1;
+  while (rem >= div) { plusCount++; div *= PLUS1; }
+  // 실제 값: n / PLUS1^plusCount
+  let divisor = 1n;
+  for (let i = 0; i < plusCount; i++) divisor *= PLUS1;
+  const q = n / divisor;
+  const r = n % divisor;
+  const plusStr = '+'.repeat(plusCount);
+  // q를 무량대수 이하로 포맷
+  const qFmt = formatBigBelow(q);
+  return qFmt + plusStr + (r > 0n ? ' ...' : '');
+}
+
+// 무량대수 이하 포맷 (재귀 방지용)
+function formatBigBelow(n) {
+  if (n === 0n) return '0';
+  if (n < 10000n) return n.toString();
+  let r = n, p = [];
+  for (const [v, nm] of FMT_UNITS) if (r >= v) { p.push(r/v + nm); r = r % v; }
+  if (r > 0n) p.push(r.toString());
+  return p.join(' ');
+}
+
+function formatBig(n) {
+  if (n < 0n) return '-' + formatBig(-n);
+  if (n >= PLUS1) return plusNotation(n);
+  return formatBigBelow(n);
+}
+function shortFmt(n) {
+  if (n < 0n) return '-' + shortFmt(-n);
+  if (n >= PLUS1) {
+    // 몇 +인지 계산
+    let plusCount = 0, div = PLUS1;
+    while (n >= div) { plusCount++; div *= PLUS1; }
+    let divisor = 1n;
+    for (let i = 0; i < plusCount; i++) divisor *= PLUS1;
+    const q = n / divisor;
+    const plusStr = '+'.repeat(plusCount);
+    return shortFmt(q) + plusStr;
+  }
+  if (n < 10000n) return n.toString();
+  for (const [v, nm] of FMT_UNITS) if (n >= v) return (n/v) + '' + nm + ((n%v > 0n) ? '+' : '');
+  return n.toString();
+}
 function lightenHex(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'#'+[Math.min(255,r+a),Math.min(255,g+a),Math.min(255,b+a)].map(v=>v.toString(16).padStart(2,'0')).join('')}
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function cmpBigStr(a,b){const sa=(a||'0').replace(/^0+/,'')||'0',sb=(b||'0').replace(/^0+/,'')||'0';if(sa.length!==sb.length)return sa.length-sb.length;return sa.localeCompare(sb)}
