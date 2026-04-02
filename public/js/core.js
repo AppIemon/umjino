@@ -118,7 +118,10 @@ function updateChipsDisplay(){
   }
 }
 function updateBetDisplay(){document.getElementById('betAmount').textContent=shortFmt(currentBet)}
-function updateSlotChipsDisplay(){const el=document.getElementById('slotMyChips');if(el)el.textContent=shortFmt(chips)+' 칩'}
+function updateSlotChipsDisplay(){
+  const el=document.getElementById('slotMyChips');if(el)el.textContent=shortFmt(chips)+' 칩';
+  const el2=document.getElementById('slotMyChips2');if(el2)el2.textContent=shortFmt(chips)+' 칩';
+}
 function updateRlChipRow(){
   const row=document.getElementById('rlChipRow');if(!row)return;row.innerHTML='';
   for(let i=chipTypes.length-1;i>=0;i--){
