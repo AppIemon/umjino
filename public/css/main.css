@@ -185,8 +185,17 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .slot-header{background:rgba(0,0,0,.68);padding:.55rem .9rem;border-bottom:2px solid rgba(241,196,15,.22);display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;flex-shrink:0;position:sticky;top:0;z-index:10}
 .slot-my-chips{color:#f1c40f;font-size:.88rem;font-weight:bold;white-space:nowrap}
 .slot-machines-area{display:flex;flex-wrap:wrap;gap:.9rem;padding:.9rem;align-content:flex-start}
-.slot-shared-ctrl{width:100%;background:rgba(0,0,0,.6);border:2px solid rgba(241,196,15,.35);border-radius:12px;padding:.65rem .85rem}
+.slot-shared-ctrl{width:100%;background:rgba(0,0,0,.6);border:2px solid rgba(241,196,15,.35);border-radius:12px;padding:.65rem .85rem;display:flex;flex-direction:column;gap:.5rem}
 .slot-shared-row{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.slot-bet-row{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap}
+.slot-chip-scroll{flex:1;overflow-x:auto;overflow-y:hidden;padding-bottom:3px}
+.slot-chip-scroll::-webkit-scrollbar{height:3px}
+.slot-chip-scroll::-webkit-scrollbar-thumb{background:rgba(241,196,15,.4);border-radius:2px}
+.slot-bet-zone{position:relative;min-width:90px;min-height:62px;background:radial-gradient(circle,rgba(46,204,113,.15) 0%,transparent 70%);border:2px dashed rgba(46,204,113,.45);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.3rem .5rem;flex-shrink:0}
+.slot-bet-label{font-size:.6rem;color:#2ecc71;font-weight:bold;pointer-events:none}
+.slot-bet-amount{font-size:.95rem;color:#f1c40f;font-weight:bold;pointer-events:none}
+.slot-clear-btn{background:rgba(231,76,60,.2);border:1px solid rgba(231,76,60,.4);color:#e74c3c;padding:.32rem .65rem;border-radius:7px;font-size:.78rem;font-weight:bold;cursor:pointer;white-space:nowrap;transition:all .18s}
+.slot-clear-btn:hover{background:rgba(231,76,60,.35)}
 .slot-chip-label{color:#f1c40f;font-size:.85rem;font-weight:bold;white-space:nowrap}
 .slot-add-btn{background:rgba(46,204,113,.15);border:1px solid rgba(46,204,113,.4);color:#2ecc71;padding:.35rem .7rem;border-radius:7px;font-size:.78rem;font-weight:bold;cursor:pointer;white-space:nowrap;transition:all .18s}
 .slot-add-btn:hover{background:rgba(46,204,113,.28)}

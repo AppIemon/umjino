@@ -31,17 +31,15 @@ function slotAddCost(currentCount) {
 }
 
 let slotMachines = [], _slotId = 0;
-// 공유 베팅 입력값
-let slotSharedBet = '';
+let slotBet = 0n;       // 현재 베팅 금액
+let slotBetDist = {};   // 베팅에 사용된 칩 분포 (환불용)
 
 function createSlotMachineData() {
   return { id: _slotId++, busy: false, grid: Array(15).fill('🍒') };
 }
 
 function initSlot() {
-  if (slotMachines.length === 0) {
-    slotMachines.push(createSlotMachineData());
-  }
+  if (slotMachines.length === 0) slotMachines.push(createSlotMachineData());
   renderSlotMachines();
 }
 
@@ -63,6 +61,80 @@ function removeSlotMachine(id) {
   renderSlotMachines();
 }
 
+// ── 슬롯 칩 던지기 ─────────────────────────────
+function slotThrowChip(chip, e) {
+  if (chip.value > chips) return;
+  const key = chip.value.toString();
+  if ((chipDist[key] || 0n) === 0n) { if (!makeChange(chip.idx)) return; }
+  chipDist[key] = (chipDist[key] || 0n) - 1n;
+  chips -= chip.value; slotBet += chip.value;
+  slotBetDist[key] = (slotBetDist[key] || 0n) + 1n;
+  sfxChip();
+
+  // 토큰 던지기 모션 → 베팅존
+  const bz = document.getElementById('slotBetZone');
+  if (bz) {
+    const bRect = bz.getBoundingClientRect();
+    const cx = (e?.clientX || window.innerWidth/2) - 27;
+    const cy = (e?.clientY || window.innerHeight*0.8) - 27;
+    const fly = document.createElement('div'); fly.className = 'flying-token';
+    fly.innerHTML = createChipSVG(chip);
+    fly.style.cssText = `width:54px;height:54px;left:${cx}px;top:${cy}px`;
+    document.body.appendChild(fly);
+    const ex = bRect.left + bRect.width/2 - 27 + (Math.random()-.5)*60;
+    const ey = bRect.top + bRect.height/2 - 27 + (Math.random()-.5)*30;
+    setTimeout(() => { fly.style.cssText += `;left:${ex}px;top:${ey}px;transform:rotate(${Math.random()*720}deg);transition:all .55s cubic-bezier(.25,.46,.45,.94)`; }, 10);
+    setTimeout(() => {
+      fly.remove();
+      const bt = document.createElement('div'); bt.className = 'bet-token';
+      bt.innerHTML = createChipSVG(chip);
+      bt.style.cssText = `width:44px;height:44px;left:${ex - bRect.left}px;top:${ey - bRect.top}px`;
+      bz.appendChild(bt);
+    }, 550);
+  }
+  updateChipsDisplay(); updateSlotBetDisplay(); saveState();
+}
+
+function slotClearBet() {
+  chips += slotBet; slotBet = 0n; slotBetDist = {};
+  chipDist = computeGreedyDist(chips);
+  const bz = document.getElementById('slotBetZone');
+  if (bz) bz.querySelectorAll('.bet-token').forEach(t => t.remove());
+  updateChipsDisplay(); updateSlotBetDisplay(); saveState();
+}
+
+function updateSlotBetDisplay() {
+  const el = document.getElementById('slotBetAmt');
+  if (el) el.textContent = slotBet > 0n ? formatBig(slotBet) + '칩' : '0';
+  const el2 = document.getElementById('slotMyChips2');
+  if (el2) el2.textContent = shortFmt(chips) + '칩';
+  // 칩 스택 업데이트
+  renderSlotChipStacks();
+}
+
+function renderSlotChipStacks() {
+  const container = document.getElementById('slotChipStacks');
+  if (!container) return;
+  container.innerHTML = '';
+  for (let i = chipTypes.length - 1; i >= 0; i--) {
+    const chip = chipTypes[i];
+    const cnt = chipDist[chip.value.toString()] || 0n;
+    if (cnt <= 0n) continue;
+    const stack = document.createElement('div');
+    stack.className = 'chip-stack';
+    stack.innerHTML = createChipSVG(chip);
+    stack.title = formatBig(chip.value) + ' × ' + cnt;
+    if (cnt > 1n) {
+      const badge = document.createElement('div');
+      badge.className = 'chip-count';
+      badge.textContent = cnt > 99n ? '99+' : cnt.toString();
+      stack.appendChild(badge);
+    }
+    stack.onclick = (e) => slotThrowChip(chip, e);
+    container.appendChild(stack);
+  }
+}
+
 function renderSlotMachines() {
   const area = document.getElementById('slotMachinesArea');
   area.innerHTML = '';
@@ -74,11 +146,49 @@ function renderSlotMachines() {
   ctrl.innerHTML = `
 <div class="slot-shared-row">
   <div class="slot-chip-label">💰 <span id="slotMyChips2">${shortFmt(chips)}칩</span></div>
-  <input class="slot-bet-inp" id="slotSharedBet" type="text" placeholder="베팅액 (모든 슬롯 공통)"
-    value="${slotSharedBet}" oninput="slotSharedBet=this.value" style="flex:1;max-width:180px">
-  <button class="slot-spin-btn" id="slotSpinAllBtn" onclick="spinAll()">스핀! 🎰</button>
   <button class="slot-add-btn" onclick="addSlotMachine()" title="슬롯머신 추가 (${formatBig(nextCost)}칩)">➕ ${formatBig(nextCost)}칩</button>
+</div>
+<div class="slot-bet-row">
+  <div class="slot-chip-scroll"><div class="chips-container" id="slotChipStacks"></div></div>
+  <div class="slot-bet-zone" id="slotBetZone">
+    <div class="slot-bet-label">베팅</div>
+    <div class="slot-bet-amount" id="slotBetAmt">0</div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:.35rem;flex-shrink:0">
+    <button class="slot-spin-btn" id="slotSpinAllBtn" onclick="spinAll()">스핀! 🎰</button>
+    <button class="slot-clear-btn" onclick="slotClearBet()">취소</button>
+  </div>
 </div>`;
+  area.appendChild(ctrl);
+
+  // 슬롯들
+  slotMachines.forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'slot-machine'; div.id = 'sm' + m.id;
+    const gridHTML = Array(15).fill(0).map((_,i) =>
+      `<div class="slot-cell" id="smCell${m.id}_${i}">${m.grid[i]}</div>`).join('');
+    div.innerHTML = `
+<div class="slot-machine-hdr">
+  <span class="slot-machine-name">🎰 슬롯 #${slotMachines.indexOf(m)+1}</span>
+  ${slotMachines.length > 1 ? `<button class="slot-close-btn" onclick="removeSlotMachine(${m.id})">✕</button>` : ''}
+</div>
+<div class="slot-grid" id="smGrid${m.id}">${gridHTML}</div>
+<div class="slot-winlines" id="smWL${m.id}"></div>
+<div class="slot-result-msg" id="smResult${m.id}"></div>
+<div class="slot-paytable-mini">
+  <div class="spm-sym">7️⃣ ×3/4/5</div><div class="spm-val">×50/220/700</div>
+  <div class="spm-sym">💎 ×3/4/5</div><div class="spm-val">×25/110/340</div>
+  <div class="spm-sym">⭐ ×3/4/5</div><div class="spm-val">×13/55/170</div>
+  <div class="spm-sym">🔔 ×3/4/5</div><div class="spm-val">×8/33/100</div>
+  <div class="spm-sym">🍇 ×3/4/5</div><div class="spm-val">×5/20/60</div>
+  <div class="spm-sym">🍋 ×3/4/5</div><div class="spm-val">×3/12/35</div>
+  <div class="spm-sym">🍒 ×3/4/5</div><div class="spm-val">×2/7/20</div>
+</div>`;
+    area.appendChild(div);
+  });
+  renderSlotChipStacks();
+  updateSlotBetDisplay();
+}
   area.appendChild(ctrl);
 
   // 슬롯들
@@ -140,19 +250,24 @@ function evalSlotGrid(grid) {
 // ── 모든 슬롯 동시 스핀 ───────────────────────
 async function spinAll() {
   if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
-  const betStr = document.getElementById('slotSharedBet').value.replace(/,/g,'').trim();
-  let betAmt; try { betAmt = BigInt(betStr); } catch(e) { alert('숫자를 입력하세요'); return; }
-  if (betAmt <= 0n) { alert('1 이상 입력'); return; }
+  if (slotBet <= 0n) { alert('베팅 먼저!'); return; }
+  const betAmt = slotBet;
   const totalBet = betAmt * BigInt(slotMachines.length);
-  if (totalBet > chips) { alert('칩 부족! 필요: ' + formatBig(totalBet) + '칩'); return; }
+
+  // slotBet은 이미 차감됐으므로, 추가 슬롯 수만큼 더 차감
+  const extraBet = betAmt * BigInt(slotMachines.length - 1);
+  if (extraBet > chips) { alert('칩 부족! 슬롯 ' + slotMachines.length + '대 × ' + formatBig(betAmt) + '칩'); return; }
 
   const busy = slotMachines.some(m => m.busy);
   if (busy) return;
 
-  // 칩 차감
-  chips -= totalBet; chipDist = computeGreedyDist(chips);
-  updateChipsDisplay(); updateSlotChipsDisplay();
-  document.getElementById('slotSpinAllBtn').disabled = true;
+  // 추가 슬롯 차감 + 베팅존 초기화
+  if (extraBet > 0n) {
+    chips -= extraBet; chipDist = computeGreedyDist(chips);
+  }
+  slotBet = 0n; slotBetDist = {};
+  document.getElementById('slotBetZone')?.querySelectorAll('.bet-token').forEach(t => t.remove());
+  updateChipsDisplay(); updateSlotBetDisplay();
 
   // 토큰 던지기 모션 (각 슬롯으로)
   slotMachines.forEach((m, mi) => {

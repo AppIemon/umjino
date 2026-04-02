@@ -137,6 +137,7 @@ function updateBetDisplay(){document.getElementById('betAmount').textContent=sho
 function updateSlotChipsDisplay(){
   const el=document.getElementById('slotMyChips');if(el)el.textContent=shortFmt(chips)+' 칩';
   const el2=document.getElementById('slotMyChips2');if(el2)el2.textContent=shortFmt(chips)+' 칩';
+  if(typeof renderSlotChipStacks==='function')renderSlotChipStacks();
 }
 function updateRlChipRow(){
   const row=document.getElementById('rlChipRow');if(!row)return;row.innerHTML='';
