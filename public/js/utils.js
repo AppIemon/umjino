@@ -16,9 +16,43 @@ const CHIP_DEF=[
   [56,'1아승기'],[57,'10아승기'],[58,'100아승기'],[59,'1천아승기'],
   [60,'1나유타'],[61,'10나유타'],[62,'100나유타'],[63,'1천나유타'],
   [64,'1불가사의'],[65,'10불가사의'],[66,'100불가사의'],[67,'1천불가사의'],[68,'1무량대수'],
+  // + 토큰 (10^72 ~ 10^140, 4씩)
+  [72,'1+'],[76,'1만+'],[80,'1억+'],[84,'1조+'],[88,'1경+'],
+  [92,'1해+'],[96,'1자+'],[100,'1양+'],[104,'1구+'],[108,'1간+'],
+  [112,'1정+'],[116,'1재+'],[120,'1극+'],[124,'1항사+'],[128,'1아승기+'],
+  [132,'1나유타+'],[136,'1불가사의+'],[140,'1천불가사의+'],
+  // ++ 토큰 (10^144 ~ 10^212, 4씩)
+  [144,'1++'],[148,'1만++'],[152,'1억++'],[156,'1조++'],[160,'1경++'],
+  [164,'1해++'],[168,'1자++'],[172,'1양++'],[176,'1구++'],[180,'1간++'],
+  [184,'1정++'],[188,'1재++'],[192,'1극++'],[196,'1항사++'],[200,'1아승기++'],
+  [204,'1나유타++'],[208,'1불가사의++'],[212,'1천불가사의++'],
+  // +++ 토큰 (10^216 ~)
+  [216,'1+++'],[220,'1만+++'],[228,'1억+++'],[236,'1조+++'],
 ];
 const PALETTE=['#D0CFC8','#CC2222','#2244BB','#1A7A1A','#1A1A1A','#882299','#CC6600','#AA8800','#8B0000','#006868','#BB2277','#334499'];
-const chipTypes=CHIP_DEF.map(([exp,label],idx)=>({value:pow10(exp),label,color:PALETTE[idx%PALETTE.length],idx}));
+// + 칩 팔레트: 무지개/홀로그램 느낌
+const PLUS1_PALETTE=['#FF2266','#FF6600','#DDAA00','#22BB44','#0088FF','#7722FF','#FF22BB','#00CCAA','#FF4488','#5500FF','#FF8800','#00CC66','#3300CC','#FF0044','#00AAFF','#CC0088','#88FF00','#FF6644'];
+// ++ 칩 팔레트: 금/백금 느낌
+const PLUS2_PALETTE=['#FFD700','#F0C040','#E8B830','#FFE066','#FFC940','#F4D03F','#FFD740','#E5BE38','#FFC300','#F7D060','#FFB700','#F5C518','#FFD000','#FFCA28','#FFC107','#FFB300','#FFAA00','#FF9800'];
+// +++ 이상 팔레트: 백금/다이아몬드
+const PLUS3_PALETTE=['#E8E8F8','#D0D8FF','#C8E8FF','#D8F0FF','#E0E0FF','#C0D0FF','#D8E8F8','#E8F0FF'];
+
+function _chipTier(label) {
+  const p3 = (label.match(/\+/g)||[]).length >= 3;
+  const p2 = !p3 && (label.match(/\+/g)||[]).length === 2;
+  const p1 = !p3 && !p2 && label.includes('+');
+  return p3 ? 3 : p2 ? 2 : p1 ? 1 : 0;
+}
+
+const chipTypes = CHIP_DEF.map(([exp, label], idx) => {
+  const tier = _chipTier(label);
+  let color;
+  if (tier === 3) color = PLUS3_PALETTE[idx % PLUS3_PALETTE.length];
+  else if (tier === 2) color = PLUS2_PALETTE[idx % PLUS2_PALETTE.length];
+  else if (tier === 1) color = PLUS1_PALETTE[idx % PLUS1_PALETTE.length];
+  else color = PALETTE[idx % PALETTE.length];
+  return { value: pow10(exp), label, color, idx, tier };
+});
 const FMT_UNITS=[
   [pow10(68),'무량대수'],[pow10(64),'불가사의'],[pow10(60),'나유타'],[pow10(56),'아승기'],
   [pow10(52),'항하사'],[pow10(48),'극'],[pow10(44),'재'],[pow10(40),'정'],[pow10(36),'간'],
@@ -82,19 +116,24 @@ function shortFmt(n) {
   }
   return n.toString();
 }
-function lightenHex(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'#'+[Math.min(255,r+a),Math.min(255,g+a),Math.min(255,b+a)].map(v=>v.toString(16).padStart(2,'0')).join('')}
+function lightenHex(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'#'+[Math.max(0,Math.min(255,r+a)),Math.max(0,Math.min(255,g+a)),Math.max(0,Math.min(255,b+a))].map(v=>v.toString(16).padStart(2,'0')).join('')}
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function cmpBigStr(a,b){const sa=(a||'0').replace(/^0+/,'')||'0',sb=(b||'0').replace(/^0+/,'')||'0';if(sa.length!==sb.length)return sa.length-sb.length;return sa.localeCompare(sb)}
 
 // ── Chip SVG ────────────────────────────────
 function createChipSVG(chip){
-  const{color,label,idx}=chip,gid='cg'+idx,sid='cs'+idx,light=lightenHex(color,55);
-  const inlays=[0,45,90,135,180,225,270,315].map(a=>{
-    const rad=a*Math.PI/180,cx=(60+Math.cos(rad)*46).toFixed(1),cy=(60+Math.sin(rad)*46).toFixed(1);
-    return`<rect x="-4" y="-7" width="8" height="14" rx="2" fill="white" opacity="0.88" transform="translate(${cx},${cy}) rotate(${a+90})"/>`;
-  }).join('');
-  const len=label.length,fs=len>=8?7.5:len>=6?9:len>=5?10.5:len>=4?12:len>=3?14:17,ty=len>=5?64:65;
-  return`<svg class="chip-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  const{color,label,idx,tier=0}=chip;
+  const gid='cg'+idx,sid='cs'+idx;
+  const light=lightenHex(color,50);
+  const len=label.length,fs=len>=8?6.5:len>=6?8:len>=5?9.5:len>=4?11:len>=3?13:16,ty=len>=5?64:65;
+
+  // ── tier 0: 일반 칩 ──────────────────────────────────────────────────────
+  if(tier===0){
+    const inlays=[0,45,90,135,180,225,270,315].map(a=>{
+      const rad=a*Math.PI/180,cx=(60+Math.cos(rad)*46).toFixed(1),cy=(60+Math.sin(rad)*46).toFixed(1);
+      return`<rect x="-4" y="-7" width="8" height="14" rx="2" fill="white" opacity="0.88" transform="translate(${cx},${cy}) rotate(${a+90})"/>`;
+    }).join('');
+    return`<svg class="chip-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
 <defs><radialGradient id="${gid}" cx="38%" cy="32%" r="62%"><stop offset="0%" stop-color="${light}"/><stop offset="100%" stop-color="${color}"/></radialGradient>
 <filter id="${sid}"><feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.5"/></filter></defs>
 <circle cx="60" cy="61" r="54" fill="${color}" opacity="0.25" filter="url(#${sid})"/>
@@ -105,6 +144,98 @@ ${inlays}
 <circle cx="60" cy="60" r="33" fill="${color}" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
 <circle cx="60" cy="60" r="33" fill="rgba(255,255,255,0.08)"/>
 <text x="60" y="${ty}" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="${fs}" fill="white" stroke="rgba(0,0,0,0.6)" stroke-width="0.8" paint-order="stroke">${label}</text>
+</svg>`;
+  }
+
+  // ── tier 1: + 칩 (홀로그램/무지개) ────────────────────────────────────────
+  if(tier===1){
+    // 다이아몬드 엣지 인레이 + 무지개 테두리
+    const rainbowStops=['#FF2266','#FF8800','#FFDD00','#22CC44','#0088FF','#8822FF','#FF2266'];
+    const diamonds=[0,45,90,135,180,225,270,315].map(a=>{
+      const rad=a*Math.PI/180,cx=(60+Math.cos(rad)*46).toFixed(1),cy=(60+Math.sin(rad)*46).toFixed(1);
+      return`<polygon points="-5,0 0,-8 5,0 0,8" fill="white" opacity="0.92" transform="translate(${cx},${cy}) rotate(${a})"/>`;
+    }).join('');
+    return`<svg class="chip-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <radialGradient id="${gid}" cx="40%" cy="35%" r="65%">
+    <stop offset="0%" stop-color="${lightenHex(color,70)}"/>
+    <stop offset="60%" stop-color="${color}"/>
+    <stop offset="100%" stop-color="${lightenHex(color,-20)||color}"/>
+  </radialGradient>
+  <linearGradient id="${gid}r" x1="0%" y1="0%" x2="100%" y2="100%">
+    ${rainbowStops.map((c,i)=>`<stop offset="${Math.round(i/6*100)}%" stop-color="${c}" stop-opacity="0.7"/>`).join('')}
+  </linearGradient>
+  <filter id="${sid}"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="${color}" flood-opacity="0.7"/></filter>
+</defs>
+<circle cx="60" cy="61" r="55" fill="${color}" opacity="0.3" filter="url(#${sid})"/>
+<circle cx="60" cy="60" r="54" fill="url(#${gid})" stroke="#222" stroke-width="2"/>
+<circle cx="60" cy="60" r="54" fill="url(#${gid}r)" opacity="0.25"/>
+<circle cx="60" cy="60" r="54" fill="none" stroke="url(#${gid}r)" stroke-width="3" opacity="0.9"/>
+${diamonds}
+<circle cx="60" cy="60" r="40" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
+<circle cx="60" cy="60" r="34" fill="${color}" opacity="0.8"/>
+<circle cx="60" cy="60" r="34" fill="rgba(255,255,255,0.12)"/>
+<text x="60" y="${ty}" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="${fs}" fill="white" stroke="rgba(0,0,0,0.7)" stroke-width="1" paint-order="stroke">${label}</text>
+</svg>`;
+  }
+
+  // ── tier 2: ++ 칩 (황금/프리미엄) ─────────────────────────────────────────
+  if(tier===2){
+    const stars=[0,60,120,180,240,300].map(a=>{
+      const rad=a*Math.PI/180,cx=(60+Math.cos(rad)*44).toFixed(1),cy=(60+Math.sin(rad)*44).toFixed(1);
+      return`<text x="${cx}" y="${(parseFloat(cy)+4).toFixed(1)}" text-anchor="middle" font-size="9" fill="#FFD700" opacity="0.9">★</text>`;
+    }).join('');
+    return`<svg class="chip-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <radialGradient id="${gid}" cx="38%" cy="30%" r="65%">
+    <stop offset="0%" stop-color="#FFF8DC"/>
+    <stop offset="40%" stop-color="${color}"/>
+    <stop offset="100%" stop-color="#B8860B"/>
+  </radialGradient>
+  <linearGradient id="${gid}g" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#FFD700"/><stop offset="50%" stop-color="#FFF0A0"/>
+    <stop offset="100%" stop-color="#B8860B"/>
+  </linearGradient>
+  <filter id="${sid}"><feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#FFD700" flood-opacity="0.8"/></filter>
+</defs>
+<circle cx="60" cy="62" r="55" fill="#B8860B" opacity="0.35" filter="url(#${sid})"/>
+<circle cx="60" cy="60" r="54" fill="url(#${gid})" stroke="#8B6914" stroke-width="3"/>
+<circle cx="60" cy="60" r="54" fill="none" stroke="url(#${gid}g)" stroke-width="4" opacity="0.8"/>
+<circle cx="60" cy="60" r="47" fill="none" stroke="#FFD700" stroke-width="1" opacity="0.5"/>
+${stars}
+<circle cx="60" cy="60" r="37" fill="none" stroke="#FFD700" stroke-width="2" opacity="0.7"/>
+<circle cx="60" cy="60" r="32" fill="#B8860B" opacity="0.5"/>
+<circle cx="60" cy="60" r="32" fill="url(#${gid})" opacity="0.6"/>
+<text x="60" y="${ty}" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="${fs}" fill="#FFF8DC" stroke="#7B5800" stroke-width="1" paint-order="stroke">${label}</text>
+</svg>`;
+  }
+
+  // ── tier 3+: +++ 칩 (백금/다이아몬드) ────────────────────────────────────
+  const sparkles=[0,40,80,120,160,200,240,280,320].map(a=>{
+    const rad=a*Math.PI/180,r=38+12*(a%80===0?1:0);
+    const cx=(60+Math.cos(rad)*r).toFixed(1),cy=(60+Math.sin(rad)*r).toFixed(1);
+    return`<text x="${cx}" y="${(parseFloat(cy)+3).toFixed(1)}" text-anchor="middle" font-size="${a%80===0?10:7}" fill="white" opacity="${a%80===0?'0.95':'0.6'}">✦</text>`;
+  }).join('');
+  return`<svg class="chip-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <radialGradient id="${gid}" cx="38%" cy="30%" r="68%">
+    <stop offset="0%" stop-color="#FFFFFF"/><stop offset="30%" stop-color="#D0E8FF"/>
+    <stop offset="70%" stop-color="${color}"/><stop offset="100%" stop-color="#8090C0"/>
+  </radialGradient>
+  <linearGradient id="${gid}p" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#E8F0FF"/><stop offset="33%" stop-color="#C0D0FF"/>
+    <stop offset="66%" stop-color="#E0F0FF"/><stop offset="100%" stop-color="#D0E8FF"/>
+  </linearGradient>
+  <filter id="${sid}"><feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#8090FF" flood-opacity="0.9"/></filter>
+</defs>
+<circle cx="60" cy="62" r="55" fill="#8090C0" opacity="0.35" filter="url(#${sid})"/>
+<circle cx="60" cy="60" r="54" fill="url(#${gid})" stroke="#A0B0D0" stroke-width="3"/>
+<circle cx="60" cy="60" r="54" fill="none" stroke="url(#${gid}p)" stroke-width="4" opacity="0.9"/>
+<circle cx="60" cy="60" r="48" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
+${sparkles}
+<circle cx="60" cy="60" r="35" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
+<circle cx="60" cy="60" r="30" fill="rgba(255,255,255,0.15)"/>
+<text x="60" y="${ty}" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="${fs}" fill="white" stroke="rgba(80,100,180,0.8)" stroke-width="1" paint-order="stroke">${label}</text>
 </svg>`;
 }
 
