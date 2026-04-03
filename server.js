@@ -1027,6 +1027,8 @@ if (process.env.VERCEL) {
   getDb().then(async () => {
     await mpCleanup();
     setInterval(mpCleanup, 120000);
+    // KBO 결과 자동 체크 (30분마다)
+    setInterval(checkKboResults, 30 * 60 * 1000);
     app.listen(PORT, () => console.log(`서버 실행 중: http://localhost:${PORT}`));
   }).catch(e => {
     console.error('DB 연결 실패:', e.message);
@@ -1298,20 +1300,32 @@ app.get('/api/horse', async (req, res) => {
     const db = await getDb();
     const races = db.collection('horse_races');
     const now = new Date();
-    // Find active or next race
-    let race = await races.findOne({ status: { $in: ['betting', 'running'] }, finishAt: { $gt: now } });
+    const requestedHorses = Math.min(10, Math.max(2, parseInt(req.query.numHorses) || 6));
+
+    // Find active race matching requested horse count
+    let race = await races.findOne({
+      status: { $in: ['betting', 'running'] },
+      finishAt: { $gt: now },
+      numHorses: requestedHorses
+    });
+
     if (!race) {
-      // Create new race
-      const numHorses = 6, distIdx = Math.floor(Math.random() * 3);
-      const raceData = generateHorseRace(numHorses, distIdx);
-      const bettingEnds = new Date(now.getTime() + 20000); // 20s betting window
+      const distIdx = Math.floor(Math.random() * 3);
+      const raceData = generateHorseRace(requestedHorses, distIdx);
+      const bettingEnds = new Date(now.getTime() + 25000);
       const finishAt = new Date(bettingEnds.getTime() + raceData.duration * 1000);
-      const r = await races.insertOne({ ...raceData, bets: [], status: 'betting', bettingEnds, finishAt, result: null, createdAt: now });
+      const r = await races.insertOne({
+        ...raceData, numHorses: requestedHorses,
+        bets: [], status: 'betting', bettingEnds, finishAt, result: null, createdAt: now
+      });
       race = await races.findOne({ _id: r.insertedId });
     }
-    res.json({ id: race._id.toString(), horses: race.horses, distLabel: race.distLabel, duration: race.duration,
+    res.json({
+      id: race._id.toString(), horses: race.horses, distLabel: race.distLabel,
+      duration: race.duration, numHorses: race.numHorses || race.horses.length,
       status: race.status, bettingEnds: race.bettingEnds, finishAt: race.finishAt,
-      result: race.result, serverTime: now.toISOString() });
+      result: race.result, serverTime: now.toISOString()
+    });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1375,26 +1389,135 @@ app.post('/api/horse', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // KBO BASEBALL  /api/baseball
 // ═══════════════════════════════════════════════════════════
-// 당일 KBO 경기 가져오기 (데이터 없으면 mock)
+const KBO_TEAMS = ['KIA','삼성','LG','두산','KT','SSG','롯데','한화','NC','키움'];
+
 async function fetchKboGames() {
+  const today = new Date();
+  const yyyymmdd = today.toISOString().slice(0,10).replace(/-/g,'');
+  const yyyy = today.getFullYear();
+
+  // 1) KBO 공식 JSON API (비공개지만 종종 작동)
   try {
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const r = await fetch(`https://www.koreabaseball.com/ws/Schedule.asmx/GetSchedule?leId=1&srId=0&seasonId=2025&gameDate=${today}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) });
-    if (!r.ok) throw new Error('fetch failed');
-    const text = await r.text();
-    // Parse XML-ish response - simplified
-    const games = [];
-    const matches = [...text.matchAll(/<homeTeam>([^<]+)<\/homeTeam>.*?<awayTeam>([^<]+)<\/awayTeam>.*?<stadium>([^<]+)<\/stadium>/gs)];
-    for (const m of matches) games.push({ home: m[1], away: m[2], stadium: m[3], id: `${m[1]}vs${m[2]}` });
-    if (games.length) return games;
+    const url = `https://www.koreabaseball.com/ws/Schedule.asmx/GetSchedule?leId=1&srId=0&seasonId=${yyyy}&gameDate=${yyyymmdd}`;
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.koreabaseball.com/' },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (r.ok) {
+      const text = await r.text();
+      const games = [];
+      // JSON 응답 파싱
+      const parsed = JSON.parse(text.replace(/^\s*\/\*.*?\*\/\s*/s,''));
+      const list = parsed?.rows || parsed?.data || parsed || [];
+      for (const g of list) {
+        const home = g.homeTeamName || g.HOME_NM || '';
+        const away = g.awayTeamName || g.AWAY_NM || '';
+        const hscore = g.homeScore ?? g.HOME_SCORE ?? null;
+        const ascore = g.awayScore ?? g.AWAY_SCORE ?? null;
+        const status = (g.status || g.GAME_SC_NM || '').includes('종료') ? 'finished' : 'open';
+        if (home && away) games.push({ home, away, hscore, ascore, status,
+          id: `${home}vs${away}_${yyyymmdd}` });
+      }
+      if (games.length) return games;
+    }
   } catch(e) {}
-  // Fallback mock
-  const teams = ['KIA','삼성','LG','두산','KT','SSG','롯데','한화','NC','키움'];
+
+  // 2) 네이버 스포츠 KBO 스케줄 (HTML 파싱)
+  try {
+    const url = `https://sports.news.naver.com/kbaseball/schedule/index.nhn?month=${yyyymmdd.slice(4,6)}&year=${yyyy}`;
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (r.ok) {
+      const html = await r.text();
+      const games = [];
+      // <td class="team home">KIA</td> 패턴
+      const dayRe = new RegExp(`<td[^>]*>${yyyymmdd.slice(6,8)}일[^<]*</td>`, 'i');
+      if (dayRe.test(html)) {
+        const rows = [...html.matchAll(/<tr[^>]*class="[^"]*game[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi)];
+        for (const row of rows.slice(0,5)) {
+          const teams = [...row[1].matchAll(/class="team[^"]*"[^>]*>\s*([^<\s]+)\s*</g)];
+          if (teams.length >= 2) {
+            const home = teams[0][1], away = teams[1][1];
+            games.push({ home, away, hscore: null, ascore: null, status: 'open',
+              id: `${home}vs${away}_${yyyymmdd}` });
+          }
+        }
+      }
+      if (games.length) return games;
+    }
+  } catch(e) {}
+
+  // 3) 오늘 날짜 기준 고정 대진 (시즌 오프 또는 월요일 등 경기 없을 때)
+  const dayOfWeek = today.getDay(); // 0=일
+  if (dayOfWeek === 1) return []; // 월요일 = 경기 없음
+  const shuffled = [...KBO_TEAMS].sort(() => Math.random() - 0.5);
   const games = [];
-  for (let i = 0; i < teams.length; i += 2)
-    games.push({ home: teams[i], away: teams[i+1], id: `${teams[i]}vs${teams[i+1]}_mock` });
+  for (let i = 0; i < shuffled.length - 1; i += 2) {
+    games.push({ home: shuffled[i], away: shuffled[i+1], hscore: null, ascore: null, status: 'open',
+      id: `${shuffled[i]}vs${shuffled[i+1]}_${yyyymmdd}` });
+  }
   return games;
 }
+
+// KBO 실시간 점수 체크 (경기 결과 자동 정산용)
+async function checkKboResults() {
+  try {
+    const db = await getDb();
+    const games = db.collection('baseball_games');
+    const today = new Date().toISOString().slice(0,10);
+    const openGames = await games.find({ date: today, status: 'open' }).toArray();
+    if (!openGames.length) return;
+
+    const yyyymmdd = today.replace(/-/g,'');
+    const yyyy = today.slice(0,4);
+    const url = `https://www.koreabaseball.com/ws/Schedule.asmx/GetSchedule?leId=1&srId=0&seasonId=${yyyy}&gameDate=${yyyymmdd}`;
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!r.ok) return;
+    const text = await r.text();
+    let list = [];
+    try {
+      const parsed = JSON.parse(text.replace(/^\s*\/\*.*?\*\/\s*/s,''));
+      list = parsed?.rows || parsed?.data || parsed || [];
+    } catch(e) { return; }
+
+    const col = db.collection('players');
+    for (const g of list) {
+      const status = (g.status || g.GAME_SC_NM || '').includes('종료') ? 'finished' : 'open';
+      if (status !== 'finished') continue;
+      const home = g.homeTeamName || g.HOME_NM || '';
+      const away = g.awayTeamName || g.AWAY_NM || '';
+      const hscore = parseInt(g.homeScore ?? g.HOME_SCORE ?? -1);
+      const ascore = parseInt(g.awayScore ?? g.AWAY_SCORE ?? -1);
+      if (!home || !away || hscore < 0) continue;
+      const result = hscore > ascore ? 'home' : hscore < ascore ? 'away' : 'draw';
+      // Find matching open game
+      const dbGame = openGames.find(og =>
+        (og.home.includes(home) || home.includes(og.home)) &&
+        (og.away.includes(away) || away.includes(og.away))
+      );
+      if (!dbGame) continue;
+      await games.updateOne({ _id: dbGame._id }, { $set: { status: 'finished', result, hscore, ascore } });
+      // Pay winners
+      const winners = (dbGame.bets || []).filter(b => b.pick === result);
+      const losers  = (dbGame.bets || []).filter(b => b.pick !== result);
+      const loserPool = losers.reduce((s,b) => s + BigInt(b.amount), 0n);
+      const winnerTotal = winners.reduce((s,b) => s + BigInt(b.amount), 0n);
+      for (const bet of winners) {
+        const share = winnerTotal > 0n ? BigInt(bet.amount) * loserPool / winnerTotal : 0n;
+        const payout = BigInt(bet.amount) + share;
+        const bp = await col.findOne({ nickname: bet.nickname });
+        if (bp) await col.updateOne({ nickname: bet.nickname },
+          { $set: { chips: (BigInt(bp.chips) + payout).toString() } });
+      }
+    }
+  } catch(e) { console.error('KBO result check:', e.message); }
+}
+
 
 app.get('/api/baseball', async (req, res) => {
   try {
@@ -1405,12 +1528,19 @@ app.get('/api/baseball', async (req, res) => {
     if (!games.length) {
       const fetched = await fetchKboGames();
       for (const g of fetched) {
-        await col.updateOne({ id: g.id, date: today }, { $setOnInsert: { ...g, date: today, bets: [], result: null, status: 'open' } }, { upsert: true });
+        await col.updateOne({ id: g.id, date: today },
+          { $setOnInsert: { ...g, date: today, bets: [], result: g.status === 'finished' ? (g.hscore > g.ascore ? 'home' : g.hscore < g.ascore ? 'away' : 'draw') : null, status: g.status || 'open' } },
+          { upsert: true });
       }
       games = await col.find({ date: today }).toArray();
     }
-    res.json(games.map(g => ({ id: g._id.toString(), home: g.home, away: g.away, status: g.status, result: g.result,
-      betCount: (g.bets || []).length })));
+    res.json(games.map(g => ({
+      id: g._id.toString(), home: g.home, away: g.away,
+      status: g.status, result: g.result,
+      hscore: g.hscore ?? null, ascore: g.ascore ?? null,
+      betCount: (g.bets || []).length,
+      myBet: null // filled client-side
+    })));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

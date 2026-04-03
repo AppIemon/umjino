@@ -464,3 +464,27 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .dm-ctx-item:hover{background:rgba(255,255,255,.1)}
 .dm-ctx-item.danger{color:#e74c3c}
 .dm-ctx-item.danger:hover{background:rgba(231,76,60,.15)}
+
+/* ── 경마 말 수 설정 ── */
+.horse-settings{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;padding:.5rem .2rem;margin-bottom:.6rem}
+.horse-num-btn{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.15);color:#aaa;padding:.3rem .65rem;border-radius:16px;cursor:pointer;font-size:.78rem;font-weight:600;transition:all .2s}
+.horse-num-btn:hover{border-color:rgba(241,196,15,.5);color:#f1c40f}
+.horse-num-btn.active{background:rgba(241,196,15,.18);border-color:#f1c40f;color:#f1c40f}
+
+/* ── 야구 개선 ── */
+.baseball-card{background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.1);border-radius:14px;padding:.8rem 1rem;margin-bottom:.6rem;transition:border-color .2s}
+.baseball-card.finished{border-color:rgba(46,204,113,.3)}
+.baseball-teams{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.55rem}
+.bb-home,.bb-away{font-size:1.1rem;font-weight:700;color:#f1c40f;min-width:60px}
+.bb-away{text-align:right}
+.bb-home.winner,.bb-away.winner{color:#2ecc71;text-shadow:0 0 8px rgba(46,204,113,.5)}
+.bb-vs{font-size:.9rem;color:#555}
+.bb-score{font-size:1.3rem;font-weight:700;color:#f1c40f;letter-spacing:.05em}
+.bb-result{font-size:.78rem;color:#2ecc71;margin-top:.2rem;font-weight:bold}
+.bb-betcount{font-size:.7rem;color:#666;margin-top:.2rem}
+.baseball-bet-row{display:flex;gap:.4rem;margin-bottom:.4rem}
+.bb-pick-btn{flex:1;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.15);color:#aaa;padding:.4rem .3rem;border-radius:9px;cursor:pointer;font-size:.82rem;font-weight:600;transition:all .2s}
+.bb-pick-btn:hover{background:rgba(52,152,219,.15);border-color:#3498db;color:#3498db}
+.bb-pick-btn.active{background:rgba(52,152,219,.25);border-color:#3498db;color:#3498db;font-weight:700}
+.bb-pick-btn.draw{flex:0 0 46px;font-size:.75rem}
+.baseball-bet-confirm{display:flex;gap:.4rem;align-items:center;animation:tabFadeIn .2s ease}

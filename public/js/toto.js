@@ -4,19 +4,34 @@
 
 // ── 경마 ────────────────────────────────────
 let horseRaceId = null, horsePollTimer = null, horseRaceStatus = null;
-let horseSelectedHorses = []; // for rank123 bet
+let horseSelectedHorses = [];
 let horseBetType = 'first';
+let horseNumHorses = 6; // 기본 6마리
 
 function renderHorseTab() {
   const el = document.getElementById('horseContent');
   if (!el) return;
-  el.innerHTML = '<div class="toto-loading">경마 정보 로딩 중...</div>';
+  el.innerHTML = `
+<div class="horse-settings">
+  <label style="color:#aaa;font-size:.82rem">말 수:</label>
+  ${[2,3,4,5,6,7,8,9,10].map(n =>
+    `<button class="horse-num-btn ${horseNumHorses===n?'active':''}" onclick="setHorseNum(${n})">${n}마리</button>`
+  ).join('')}
+</div>
+<div id="horseContentInner"><div class="toto-loading">경마 정보 로딩 중...</div></div>`;
   loadHorseRace();
+}
+
+function setHorseNum(n) {
+  horseNumHorses = n;
+  horseRaceId = null; // 강제 새 레이스
+  clearInterval(horsePollTimer); horsePollTimer = null;
+  renderHorseTab();
 }
 
 async function loadHorseRace() {
   try {
-    const res = await fetchT('/api/horse', null, 8000);
+    const res = await fetchT(`/api/horse?numHorses=${horseNumHorses}`, null, 8000);
     const d = await res.json();
     horseRaceId = d.id;
     horseRaceStatus = d.status;
@@ -25,7 +40,10 @@ async function loadHorseRace() {
       clearInterval(horsePollTimer);
       horsePollTimer = setInterval(pollHorseRace, 1500);
     }
-  } catch(e) { document.getElementById('horseContent').innerHTML = '<div class="toto-err">로드 실패</div>'; }
+  } catch(e) {
+    const el = document.getElementById('horseContentInner') || document.getElementById('horseContent');
+    if (el) el.innerHTML = '<div class="toto-err">로드 실패</div>';
+  }
 }
 
 async function pollHorseRace() {
@@ -45,7 +63,7 @@ async function pollHorseRace() {
 }
 
 function renderHorseRaceUI(d) {
-  const el = document.getElementById('horseContent');
+  const el = document.getElementById('horseContentInner') || document.getElementById('horseContent');
   const now = Date.now();
   const bettingEnds = new Date(d.bettingEnds).getTime();
   const finishAt = new Date(d.finishAt).getTime();
@@ -155,31 +173,43 @@ async function loadBaseballGames() {
 function renderBaseballUI() {
   const el = document.getElementById('baseballContent');
   if (!el) return;
-  if (!baseballGames.length) { el.innerHTML = '<div class="toto-empty">오늘 예정 경기 없음</div>'; return; }
-  el.innerHTML = baseballGames.map(g => `
-<div class="baseball-card">
+  if (!baseballGames.length) { el.innerHTML = '<div class="toto-empty">⚾ 오늘 예정 경기 없음</div>'; return; }
+  el.innerHTML = baseballGames.map(g => {
+    const isDone = g.status === 'finished';
+    const resultLabel = isDone ? (g.result==='home'?`🏆 ${g.home} 승`:g.result==='away'?`🏆 ${g.away} 승`:'🤝 무승부') : '';
+    const score = (g.hscore!=null&&g.ascore!=null) ? `<span class="bb-score">${g.hscore}:${g.ascore}</span>` : '';
+    return `<div class="baseball-card${isDone?' finished':''}">
   <div class="baseball-teams">
-    <span class="bb-home">${g.home}</span>
-    <span class="bb-vs">VS</span>
-    <span class="bb-away">${g.away}</span>
+    <span class="bb-home${g.result==='home'?' winner':''}">${g.home}</span>
+    <div style="text-align:center">${score||'<span class="bb-vs">VS</span>'}${isDone?`<div class="bb-result">${resultLabel}</div>`:`<div class="bb-betcount">${g.betCount}명 참여</div>`}</div>
+    <span class="bb-away${g.result==='away'?' winner':''}">${g.away}</span>
   </div>
-  <div class="baseball-status">${g.status === 'finished' ? `결과: ${g.result==='home'?g.home:g.result==='away'?g.away:'무승부'}` : `베팅 가능 · ${g.betCount}명 참여`}</div>
-  ${g.status === 'open' ? `
-  <div class="baseball-bet-row">
-    <select class="baseball-pick" id="bbPick_${g.id}">
-      <option value="home">${g.home} 승</option>
-      <option value="away">${g.away} 승</option>
-      <option value="draw">무승부</option>
-    </select>
-    <input class="slot-bet-inp" id="bbAmt_${g.id}" placeholder="베팅액" style="width:100px">
-    <button class="btn-primary" onclick="placeBaseballBet('${g.id}')">베팅</button>
-  </div>` : ''}
-</div>`).join('');
+  ${!isDone?`<div class="baseball-bet-row">
+    <button class="bb-pick-btn" onclick="bbSelectPick('${g.id}','home',this)">${g.home}</button>
+    <button class="bb-pick-btn draw" onclick="bbSelectPick('${g.id}','draw',this)">무</button>
+    <button class="bb-pick-btn" onclick="bbSelectPick('${g.id}','away',this)">${g.away}</button>
+  </div>
+  <div class="baseball-bet-confirm" id="bbConfirm_${g.id}" style="display:none">
+    <input class="slot-bet-inp" id="bbAmt_${g.id}" placeholder="베팅액" style="width:110px">
+    <button class="btn-primary" style="font-size:.82rem" onclick="placeBaseballBet('${g.id}')">베팅</button>
+  </div>`:''}
+</div>`;
+  }).join('');
+}
+
+let _bbPicks = {};
+function bbSelectPick(gameId, pick, btn) {
+  _bbPicks[gameId] = pick;
+  btn.closest('.baseball-bet-row').querySelectorAll('.bb-pick-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const cf = document.getElementById('bbConfirm_'+gameId);
+  if(cf) cf.style.display='flex';
 }
 
 async function placeBaseballBet(gameId) {
   if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
-  const pick = document.getElementById('bbPick_' + gameId)?.value;
+  const pick = _bbPicks[gameId];
+  if (!pick) { alert('팀을 선택하세요'); return; }
   const amtStr = document.getElementById('bbAmt_' + gameId)?.value?.trim();
   let amt; try { amt = BigInt(amtStr); } catch(e) { alert('금액 입력'); return; }
   if (amt <= 0n) { alert('0보다 커야 함'); return; }
