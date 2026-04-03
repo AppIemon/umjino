@@ -316,6 +316,7 @@ window.addEventListener('beforeunload', ()=>{
     setTimeout(()=>{const m=document.getElementById('bgMusic');m.volume=0.5;m.play().catch(()=>{});document.getElementById('musicButton').textContent='🔊'},150);
   }
   drawRlWheel(0);
+  if(typeof rlIdleAnim==='function') rlIdleAnim();
   smAnimLoop();
   initSlot();
   if(loadSession()){

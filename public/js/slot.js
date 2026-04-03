@@ -65,7 +65,8 @@ function removeSlotMachine(id) {
 function slotThrowChip(chip, e) {
   if (chip.value > chips) return;
   const key = chip.value.toString();
-  if ((chipDist[key] || 0n) === 0n) { if (!makeChange(chip.idx)) return; }
+  const _di = DISPLAY_CHIPS.findIndex(c => c.value === chip.value);
+  if ((chipDist[key] || 0n) === 0n) { if (!makeChange(_di)) return; }
   chipDist[key] = (chipDist[key] || 0n) - 1n;
   chips -= chip.value; slotBet += chip.value;
   slotBetDist[key] = (slotBetDist[key] || 0n) + 1n;
@@ -189,36 +190,6 @@ function renderSlotMachines() {
   renderSlotChipStacks();
   updateSlotBetDisplay();
 }
-  area.appendChild(ctrl);
-
-  // 슬롯들
-  slotMachines.forEach(m => {
-    const div = document.createElement('div');
-    div.className = 'slot-machine'; div.id = 'sm' + m.id;
-    const gridHTML = Array(15).fill(0).map((_,i) =>
-      `<div class="slot-cell" id="smCell${m.id}_${i}">${m.grid[i]}</div>`).join('');
-    div.innerHTML = `
-<div class="slot-machine-hdr">
-  <span class="slot-machine-name">🎰 슬롯 #${slotMachines.indexOf(m)+1}</span>
-  ${slotMachines.length > 1 ? `<button class="slot-close-btn" onclick="removeSlotMachine(${m.id})">✕</button>` : ''}
-</div>
-<div class="slot-grid" id="smGrid${m.id}">${gridHTML}</div>
-<div class="slot-winlines" id="smWL${m.id}"></div>
-<div class="slot-result-msg" id="smResult${m.id}"></div>
-<div class="slot-paytable-mini">
-  <div class="spm-sym">7️⃣ ×3/4/5</div><div class="spm-val">×50/220/700</div>
-  <div class="spm-sym">💎 ×3/4/5</div><div class="spm-val">×25/110/340</div>
-  <div class="spm-sym">⭐ ×3/4/5</div><div class="spm-val">×13/55/170</div>
-  <div class="spm-sym">🔔 ×3/4/5</div><div class="spm-val">×8/33/100</div>
-  <div class="spm-sym">🍇 ×3/4/5</div><div class="spm-val">×5/20/60</div>
-  <div class="spm-sym">🍋 ×3/4/5</div><div class="spm-val">×3/12/35</div>
-  <div class="spm-sym">🍒 ×3/4/5</div><div class="spm-val">×2/7/20</div>
-</div>`;
-    area.appendChild(div);
-  });
-  updateSlotChipsDisplay();
-}
-
 // ── 가중 랜덤 ────────────────────────────────
 function weightedSym() {
   let r = Math.floor(Math.random() * WEIGHT_TOTAL);

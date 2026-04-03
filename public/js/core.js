@@ -84,8 +84,10 @@ function switchTabGroup(group) {
     document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
     const tabId = group==='community' ? 'tabCommunity' : 'tabAdmin';
     document.getElementById(tabId)?.classList.add('active');
-    if(group==='community') loadCommunityTab();
-    if(group==='admin') renderAdminTab();
+    setTimeout(() => {
+      if(group==='community') loadCommunityTab();
+      if(group==='admin') renderAdminTab();
+    }, 30);
   }
 }
 
@@ -218,24 +220,56 @@ function toggleMusic(){
 }
 
 // ── Chip distribution ────────────────────────
-function computeGreedyDist(total){let rem=total,dist={};for(let i=chipTypes.length-1;i>=0;i--){const cv=chipTypes[i].value,k=cv.toString();dist[k]=rem/cv;rem=rem%cv;}return dist}
-function makeChange(ti){
-  const tk=chipTypes[ti].value.toString();if((chipDist[tk]||0n)>0n)return true;
-  for(let j=ti+1;j<chipTypes.length;j++){const jk=chipTypes[j].value.toString();if((chipDist[jk]||0n)>0n){chipDist[jk]-=1n;chipDist[chipTypes[j-1].value.toString()]=(chipDist[chipTypes[j-1].value.toString()]||0n)+10n;return makeChange(ti);}}
+// 표시용 칩: 1, 10, 100, 1천 4종만. 1천 이상은 1천 묶음으로.
+const DISPLAY_CHIPS = [
+  { value: 1000n, label: '1천' },
+  { value: 100n,  label: '100' },
+  { value: 10n,   label: '10' },
+  { value: 1n,    label: '1' },
+];
+function computeGreedyDist(total) {
+  let rem = total, dist = {};
+  for (const c of DISPLAY_CHIPS) {
+    const k = c.value.toString();
+    dist[k] = rem / c.value;
+    rem = rem % c.value;
+  }
+  return dist;
+}
+function makeChange(ti) {
+  // ti는 이제 DISPLAY_CHIPS 인덱스 (4종 기준)
+  // chipDist 키는 DISPLAY_CHIPS.value.toString()
+  const target = DISPLAY_CHIPS[ti];
+  if (!target) return false;
+  const tk = target.value.toString();
+  if ((chipDist[tk] || 0n) > 0n) return true;
+  // 상위 단위에서 분해
+  for (let j = ti - 1; j >= 0; j--) {
+    const upper = DISPLAY_CHIPS[j];
+    const uk = upper.value.toString();
+    if ((chipDist[uk] || 0n) > 0n) {
+      chipDist[uk] -= 1n;
+      const lower = DISPLAY_CHIPS[j + 1];
+      const lk = lower.value.toString();
+      chipDist[lk] = (chipDist[lk] || 0n) + (upper.value / lower.value);
+      return makeChange(ti);
+    }
+  }
   return false;
 }
 // 보유 칩 중 표시할 슬롯 목록 반환 (상위 10개, + / ++ 우선)
 function getDisplayChips() {
-  // 보유한 칩 종류 전부 (값 내림차순)
+  // 1/10/100/1천 4종만, 보유량 있는 것만 표시
   const have = [];
-  for (let i = chipTypes.length - 1; i >= 0; i--) {
-    const chip = chipTypes[i], cnt = chipDist[chip.value.toString()] || 0n;
-    if (cnt > 0n) have.push({ chip, cnt });
+  for (const c of DISPLAY_CHIPS) {
+    const cnt = chipDist[c.value.toString()] || 0n;
+    if (cnt > 0n) {
+      // chipTypes에서 같은 value 찾기
+      const chip = chipTypes.find(ct => ct.value === c.value) || { value: c.value, label: c.label, color: '#888', idx: 0, tier: 0 };
+      have.push({ chip, cnt });
+    }
   }
-  if (have.length <= 10) return have;
-
-  // 상위 10개만 (이미 내림차순)
-  return have.slice(0, 10);
+  return have;
 }
 
 function _makeChipStack(chip, cnt, onClickFn) {

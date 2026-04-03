@@ -6,7 +6,9 @@
 function throwChip(chip,e){
   if(gamePhase!=='betting'||chips<chip.value||isAnimating)return;
   const key=chip.value.toString();
-  if((chipDist[key]||0n)===0n){if(!makeChange(chip.idx))return;}
+  // DISPLAY_CHIPS 인덱스 찾기
+  const di = DISPLAY_CHIPS.findIndex(c => c.value === chip.value);
+  if((chipDist[key]||0n)===0n){if(!makeChange(di))return;}
   chipDist[key]=(chipDist[key]||0n)-1n;chips-=chip.value;currentBet+=chip.value;betTokens.push(chip.idx);
   sfxChip();saveState();
   // Support both mouse and touch events
