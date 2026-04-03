@@ -10,11 +10,20 @@
 
 <nav class="main-nav">
   <div class="nav-brand">🃏 엄지노</div>
-  <div class="nav-tabs">
-    <button class="nav-tab active" onclick="switchTab('poker')">🃏 포커</button>
-    <button class="nav-tab" onclick="switchTab('roulette')">🎡 룰렛</button>
-    <button class="nav-tab" onclick="switchTab('slot')">🎰 슬롯</button>
-    <button class="nav-tab" onclick="switchTab('pvp')">⚔️ 멀티</button>
+  <div class="nav-tabs" id="navTabs">
+    <div class="nav-tab-group">
+      <button class="nav-tab-group-btn active" onclick="switchTabGroup('play')">🎮 플레이</button>
+      <button class="nav-tab-group-btn" onclick="switchTabGroup('community')">👥 커뮤니티</button>
+      <button class="nav-tab-group-btn" onclick="switchTabGroup('admin')">⚙️ 관리</button>
+    </div>
+    <div class="nav-sub-tabs" id="navSubTabs">
+      <button class="nav-tab active" onclick="switchTab('poker')">🃏 포커</button>
+      <button class="nav-tab" onclick="switchTab('roulette')">🎡 룰렛</button>
+      <button class="nav-tab" onclick="switchTab('slot')">🎰 슬롯</button>
+      <button class="nav-tab" onclick="switchTab('pvp')">⚔️ 멀티</button>
+      <button class="nav-tab" onclick="switchTab('toto')">🏇 토토</button>
+      <button class="nav-tab" onclick="switchTab('dice')">🎲 주사위</button>
+    </div>
   </div>
   <div class="nav-actions">
     <button class="nav-icon-btn" onclick="showBank()">🏦</button>
@@ -148,6 +157,46 @@
   </div>
 </div>
 
+<!-- TOTO -->
+<div class="tab-page" id="tabToto">
+  <div class="toto-wrap">
+    <div class="toto-sub-tabs">
+      <button class="toto-sub-btn active" onclick="switchTotoSub('horse',this)">🏇 경마</button>
+      <button class="toto-sub-btn" onclick="switchTotoSub('baseball',this)">⚾ KBO 야구</button>
+    </div>
+    <div id="horseSub">
+      <div id="horseContent"><div class="toto-loading">경마 탭을 선택하세요</div></div>
+    </div>
+    <div id="baseballSub" style="display:none">
+      <div id="baseballContent"><div class="toto-loading">야구 탭을 선택하세요</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- DICE -->
+<div class="tab-page" id="tabDice">
+  <div class="toto-wrap"><div id="diceContent"></div></div>
+</div>
+
+<!-- COMMUNITY (랭킹+DM을 탭으로) -->
+<div class="tab-page" id="tabCommunity">
+  <div class="community-wrap">
+    <div class="community-sub-tabs">
+      <button class="toto-sub-btn active" onclick="switchCommunitySub('ranking',this)">🏆 랭킹</button>
+      <button class="toto-sub-btn" onclick="switchCommunitySub('dm',this)">💬 DM</button>
+      <button class="toto-sub-btn" onclick="switchCommunitySub('invest',this)">💹 내 투자</button>
+    </div>
+    <div id="communityRanking"><div id="communityRankingContent"><div class="toto-loading">불러오는 중...</div></div></div>
+    <div id="communityDM" style="display:none"><div id="dmPanelInline" class="dm-panel-inline"></div></div>
+    <div id="communityInvest" style="display:none"><div id="investContent"><div class="toto-loading">투자 내역 로딩...</div></div></div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div class="tab-page" id="tabAdmin">
+  <div class="toto-wrap"><div id="adminContent"><div class="toto-loading">로딩...</div></div></div>
+</div>
+
 <!-- OVERLAYS -->
 <div class="result-overlay" id="resultOverlay">
   <div class="result-content">
@@ -245,6 +294,9 @@
 <script src="./js/stickman.js"></script>
 <script src="./js/pvp.js"></script>
 <script src="./js/dm.js"></script>
+<script src="./js/toto.js"></script>
+<script src="./js/dice.js"></script>
+<script src="./js/admin.js"></script>
 <script>
 // Prevent context menu on game elements (stops long-press text selection on mobile)
 document.addEventListener('contextmenu', e=>{

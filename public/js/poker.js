@@ -125,12 +125,14 @@ function evaluateHand(){
     if(cmpBigStr(win.toString(),stats.maxWin)>0)stats.maxWin=win.toString();
     if(result.payoutF>(stats.bestHandPayout||0)){stats.bestHand=result.name;stats.bestHandPayout=result.payoutF}
     saveStats();sfxWin();
+    if(typeof saveRecentPlay==='function')saveRecentPlay({type:'🃏 파이브 포커',desc:result.name+' +'+formatBig(win)+'칩',result:'win'});
     titleEl.textContent=result.name;titleEl.className='result-title win';amountEl.textContent='+'+formatBig(win)+' 칩';
     pendingWin=win;
     document.getElementById('resultButtons').innerHTML=`<button class="btn-primary" onclick="clearTimeout(animationTimeout);startDoubleUp(pendingWin)">더블업 🎰</button><button class="skip-button" onclick="clearTimeout(animationTimeout);collectPending()">그냥 받기</button>`;
     ov.classList.add('show');animationTimeout=setTimeout(()=>collectPending(),8000);
   }else{
     pendingWin=0n;saveStats();sfxLose();
+    if(typeof saveRecentPlay==='function')saveRecentPlay({type:'🃏 파이브 포커',desc:'패배 -'+formatBig(currentBet)+'칩',result:'lose'});
     titleEl.textContent='패배';titleEl.className='result-title lose';amountEl.textContent='-'+formatBig(currentBet)+' 칩';
     document.getElementById('resultButtons').innerHTML='<button class="skip-button" onclick="skipAnimation()">스킵 (Enter)</button>';
     ov.classList.add('show');animationTimeout=setTimeout(()=>{isAnimating=false;resetGame()},2000);

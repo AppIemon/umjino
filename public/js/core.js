@@ -60,6 +60,30 @@ function showTaxToast(){}
 
 // ── Tab switching ────────────────────────────
 let currentTab='poker';
+// 탭 그룹 (플레이/커뮤니티/관리자)
+const TAB_GROUPS = {
+  play: ['poker','roulette','slot','pvp','toto','dice'],
+  community: ['community'],
+  admin: ['admin'],
+};
+const PLAY_TABS = ['poker','roulette','slot','pvp','toto','dice'];
+
+function switchTabGroup(group) {
+  document.querySelectorAll('.nav-tab-group-btn').forEach((el,i) => el.classList.toggle('active', ['play','community','admin'][i]===group));
+  const subTabs = document.getElementById('navSubTabs');
+  if (group === 'play') {
+    subTabs.style.display = '';
+    switchTab(currentTab && PLAY_TABS.includes(currentTab) ? currentTab : 'poker');
+  } else {
+    subTabs.style.display = 'none';
+    document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+    const tabId = group === 'community' ? 'tabCommunity' : 'tabAdmin';
+    document.getElementById(tabId)?.classList.add('active');
+    if (group === 'community') loadCommunityTab();
+    if (group === 'admin') renderAdminTab();
+  }
+}
+
 function switchTab(name){
   if(currentTab===name)return;sfxTabSwitch();
   if(isMusicPlaying){
@@ -69,11 +93,107 @@ function switchTab(name){
   }
   document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
-  document.getElementById('tab'+name[0].toUpperCase()+name.slice(1)).classList.add('active');
-  document.querySelectorAll('.nav-tab')[['poker','roulette','slot','pvp'].indexOf(name)].classList.add('active');
+  const tabEl = document.getElementById('tab'+name[0].toUpperCase()+name.slice(1));
+  if (tabEl) tabEl.classList.add('active');
+  const tabIdx = PLAY_TABS.indexOf(name);
+  if (tabIdx >= 0) document.querySelectorAll('.nav-tab')[tabIdx]?.classList.add('active');
   currentTab=name;
   if(name==='roulette'){buildRlTable();updateRlChipRow();if(rlJoined)rlStartPolling();}
   if(name==='slot')updateSlotChipsDisplay();
+  if(name==='toto')renderHorseTab();
+  if(name==='dice')renderDiceUI();
+}
+
+function switchTotoSub(sub, btn) {
+  document.querySelectorAll('#tabToto .toto-sub-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('horseSub').style.display = sub === 'horse' ? '' : 'none';
+  document.getElementById('baseballSub').style.display = sub === 'baseball' ? '' : 'none';
+  if (sub === 'horse') renderHorseTab();
+  if (sub === 'baseball') loadBaseballGames();
+}
+
+let _communitySub = 'ranking';
+function switchCommunitySub(sub, btn) {
+  document.querySelectorAll('.community-sub-tabs .toto-sub-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('communityRanking').style.display = sub === 'ranking' ? '' : 'none';
+  document.getElementById('communityDM').style.display = sub === 'dm' ? '' : 'none';
+  document.getElementById('communityInvest').style.display = sub === 'invest' ? '' : 'none';
+  _communitySub = sub;
+  if (sub === 'ranking') loadCommunityRanking();
+  if (sub === 'dm') loadInlineDM();
+  if (sub === 'invest') loadInvestments();
+}
+
+async function loadCommunityTab() {
+  if (_communitySub === 'ranking') loadCommunityRanking();
+  else if (_communitySub === 'dm') loadInlineDM();
+  else if (_communitySub === 'invest') loadInvestments();
+}
+
+async function loadCommunityRanking() {
+  const el = document.getElementById('communityRankingContent');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/ranking'+(nickname?'?nick='+encodeURIComponent(nickname):''));
+    const data = await res.json();
+    const rows = data.top100||data, surrounding = data.surrounding||[], userRank = data.userRank||0;
+    if (!Array.isArray(rows)||!rows.length) { el.innerHTML='<div class="toto-empty">랭킹 없음</div>'; return; }
+    const medals = ['🥇','🥈','🥉'];
+    const rr = row => {
+      const isMe = nickname && row.nickname === nickname;
+      const medal = row.rank<=3 ? medals[row.rank-1] : '';
+      return `<tr class="rank-${row.rank}${isMe?' me-row':''}"><td>${medal}${row.rank}</td><td><span style="cursor:pointer;text-decoration:underline dotted" onclick="showProfile('${escHtml(row.nickname)}')">${escHtml(row.nickname)}</span>${isMe?' 👈':''}</td><td>${shortFmt(BigInt(row.maxChips||'0'))}</td></tr>`;
+    };
+    let html = '<table class="ranking-table"><thead><tr><th>순위</th><th>닉네임</th><th>최고 칩</th></tr></thead><tbody>';
+    rows.forEach(row => html += rr(row));
+    if (surrounding.length&&userRank>100) { html+=`<tr><td colspan="3" style="text-align:center;color:#444">・・・</td></tr>`; surrounding.forEach(row=>html+=rr(row)); }
+    html += '</tbody></table>';
+    if (userRank>0) html += `<div style="margin-top:.5rem;font-size:.78rem;color:#aaa">내 순위: ${userRank}위</div>`;
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<div class="toto-err">로드 실패</div>'; }
+}
+
+function loadInlineDM() {
+  const panel = document.getElementById('dmPanelInline');
+  if (!panel) return;
+  if (!sessionNickname) { panel.innerHTML = '<div class="toto-empty">로그인 후 이용 가능</div>'; return; }
+  // DM 패널을 인라인으로 렌더 (showDM와 같은 로직)
+  dmCurrentConv = null;
+  dmLoadInboxInline();
+}
+
+async function dmLoadInboxInline() {
+  const panel = document.getElementById('dmPanelInline');
+  if (!panel) return;
+  panel.innerHTML = `<div class="dm-header" style="border-radius:10px 10px 0 0"><span>💬 메시지</span><button class="dm-new-btn" onclick="dmNewGroup()">+ 그룹</button></div><div class="dm-list" id="dmListInline"><div class="dm-loading">불러오는 중...</div></div>`;
+  try {
+    const res = await dmGet({ action: 'inbox' });
+    const convs = await res.json();
+    const list = document.getElementById('dmListInline');
+    if (!list) return;
+    if (!convs.length) { list.innerHTML = '<div class="dm-empty">대화가 없습니다</div>'; return; }
+    list.innerHTML = convs.map(c => `<div class="dm-conv-item" onclick="showDM();dmOpenConv(${JSON.stringify(JSON.stringify(c))})">
+      <div class="dm-conv-icon">${c.type==='group'?'👥':'💬'}</div>
+      <div class="dm-conv-info"><div class="dm-conv-name">${escHtml(c.name)}${c.unread>0?`<span class="dm-unread-dot">${c.unread}</span>`:''}</div>
+      <div class="dm-conv-last">${c.lastMsg?escHtml(c.lastMsg.content.slice(0,40)):'메시지 없음'}</div></div>
+    </div>`).join('');
+  } catch(e) { document.getElementById('dmListInline').innerHTML = '<div class="dm-empty">로드 실패</div>'; }
+}
+
+async function loadInvestments() {
+  const el = document.getElementById('investContent');
+  if (!el) return;
+  if (!sessionNickname) { el.innerHTML = '<div class="toto-empty">로그인 필요</div>'; return; }
+  try {
+    const res = await fetchT(`/api/invest?nick=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`, null, 5000);
+    const invs = await res.json();
+    if (!invs.length) { el.innerHTML = '<div class="toto-empty">투자 내역 없음</div>'; return; }
+    el.innerHTML = `<table class="ranking-table"><thead><tr><th>대상</th><th>원금</th><th>현재가치</th><th>날짜</th></tr></thead><tbody>
+      ${invs.map(i=>`<tr><td>${escHtml(i.target)}</td><td>${shortFmt(BigInt(i.amount||'0'))}</td><td>${shortFmt(BigInt(i.currentValue||'0'))}</td><td>${new Date(i.createdAt).toLocaleDateString('ko-KR')}</td></tr>`).join('')}
+    </tbody></table>`;
+  } catch(e) { el.innerHTML = '<div class="toto-err">로드 실패</div>'; }
 }
 
 // ── Music ────────────────────────────────────

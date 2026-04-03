@@ -356,6 +356,9 @@ async function spinAll() {
   if (totalWin > 0n) {
     chips += totalWin; chipDist = computeGreedyDist(chips);
     sfxSlotWin(3);
+    if(typeof saveRecentPlay==='function')saveRecentPlay({type:'🎰 슬롯머신',desc:slotMachines.length+'대 × '+formatBig(betAmt)+'칩 베팅 → +'+formatBig(totalWin)+'칩',result:'win'});
+  } else {
+    if(typeof saveRecentPlay==='function')saveRecentPlay({type:'🎰 슬롯머신',desc:slotMachines.length+'대 × '+formatBig(betAmt)+'칩 베팅 → 꽝',result:'lose'});
   }
 
   updateChipsDisplay(); updateSlotChipsDisplay(); updateRlChipRow(); saveState();

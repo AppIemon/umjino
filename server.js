@@ -596,6 +596,18 @@ app.post('/api/player', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
 
+// ─── /api/profile (공개 프로필: 칭호 포함) ────────────────────────────────────
+app.get('/api/profile', async (req, res) => {
+  const { nick } = req.query;
+  if (!nick) return res.status(400).json({ error: 'missing nick' });
+  try {
+    const col = (await getDb()).collection('players');
+    const p = await col.findOne({ nickname: nick }, { projection: { title: 1, titleColor: 1, chips: 1, stats: 1, lastLoginAt: 1, _id: 0 } });
+    if (!p) return res.status(404).json({ error: '없는 유저' });
+    res.json({ nickname: nick, title: p.title || null, titleColor: p.titleColor || null, maxChips: p.stats?.maxChips || '0', lastLoginAt: p.lastLoginAt || null });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── /api/ranking ─────────────────────────────────────────────────────────────
 app.get('/api/ranking', async (req, res) => {
   const { nick } = req.query;
@@ -1187,6 +1199,434 @@ app.post('/api/dm', async (req, res) => {
       return res.json({ ...msg, _id: r.insertedId.toString(), newChips: newSenderChips });
     }
 
+    // 메시지 수정
+    if (action === 'edit_msg') {
+      const { msgId, content } = body;
+      if (!msgId || !content?.trim()) return res.status(400).json({ error: 'missing fields' });
+      const { ObjectId } = require('mongodb');
+      const msg = await msgs.findOne({ _id: new ObjectId(msgId) });
+      if (!msg) return res.status(404).json({ error: '메시지 없음' });
+      if (msg.sender !== myNick) return res.status(403).json({ error: '본인만 수정 가능' });
+      await msgs.updateOne({ _id: new ObjectId(msgId) }, { $set: { content: content.trim().slice(0, 1000), edited: true, editedAt: now } });
+      return res.json({ ok: true });
+    }
+
+    // 메시지 삭제
+    if (action === 'delete_msg') {
+      const { msgId } = body;
+      if (!msgId) return res.status(400).json({ error: 'missing msgId' });
+      const { ObjectId } = require('mongodb');
+      const msg = await msgs.findOne({ _id: new ObjectId(msgId) });
+      if (!msg) return res.status(404).json({ error: '메시지 없음' });
+      if (msg.sender !== myNick) return res.status(403).json({ error: '본인만 삭제 가능' });
+      await msgs.updateOne({ _id: new ObjectId(msgId) }, { $set: { content: '(삭제된 메시지)', deleted: true } });
+      return res.json({ ok: true });
+    }
+
     res.status(404).json({ error: 'unknown action' });
   } catch(e) { console.error('POST /api/dm', e); res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// DICE  /api/dice
+// ═══════════════════════════════════════════════════════════
+app.post('/api/dice', async (req, res) => {
+  const { nickname, token, betType, guess, amount } = req.body || {};
+  try {
+    const db = await getDb(); const col = db.collection('players');
+    const p = await col.findOne({ nickname, token });
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+    const amt = BigInt(amount || '0');
+    if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
+    if (BigInt(p.chips || '0') < amt) return res.status(400).json({ error: '칩 부족' });
+    const roll = Math.floor(Math.random() * 6) + 1;
+    let won = false, mult = 0n;
+    if (betType === 'exact') { won = roll === Number(guess); mult = 6n; }
+    else if (betType === 'parity') { won = (roll % 2 === 0) === (guess === 'even'); mult = 2n; }
+    else return res.status(400).json({ error: 'betType: exact|parity' });
+    const newChips = won
+      ? (BigInt(p.chips) + amt * (mult - 1n)).toString()
+      : (BigInt(p.chips) - amt).toString();
+    await col.updateOne({ nickname }, { $set: { chips: newChips } });
+    res.json({ roll, won, newChips, payout: won ? (amt * mult).toString() : '0' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// HORSE RACING  /api/horse
+// ═══════════════════════════════════════════════════════════
+// race 생성은 자동: GET creates/returns active race, POST places bet
+const HORSE_DISTANCES = [
+  { label: '단거리 (1000m)', duration: 15, ev: 1.05 },
+  { label: '중거리 (2000m)', duration: 30, ev: 1.10 },
+  { label: '장거리 (3000m)', duration: 50, ev: 1.15 },
+];
+
+function generateHorseRace(numHorses, distIdx) {
+  const dist = HORSE_DISTANCES[distIdx] || HORSE_DISTANCES[0];
+  // Random odds (rough inverse-probability), sum ~1/ev
+  const rawOdds = Array.from({ length: numHorses }, () => Math.random() * 3 + 0.5);
+  const total = rawOdds.reduce((a, b) => a + b, 0);
+  const targetSum = numHorses / dist.ev; // so EV ≈ dist.ev
+  const odds = rawOdds.map(o => (o / total) * targetSum);
+  const payouts = odds.map(o => Math.max(1.1, numHorses / o)); // actual payout multiplier
+  const horses = Array.from({ length: numHorses }, (_, i) => ({
+    name: ['천리마', '적토마', '번개', '폭풍', '질주', '황금', '바람', '불꽃', '태양', '달빛'][i] || `말${i+1}`,
+    prob: odds[i] / odds.reduce((a,b)=>a+b,0),
+    payout: Math.round(payouts[i] * 100) / 100,
+  }));
+  return { horses, distIdx, distLabel: dist.label, duration: dist.duration };
+}
+
+function runHorseRace(horses) {
+  // Weighted random pick for 1st, 2nd, 3rd
+  const remaining = [...horses.map((h, i) => ({ ...h, idx: i }))];
+  const picks = [];
+  for (let place = 0; place < Math.min(3, remaining.length); place++) {
+    const total = remaining.reduce((s, h) => s + h.prob, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < remaining.length; i++) {
+      r -= remaining[i].prob;
+      if (r <= 0) { picks.push(remaining[i].idx); remaining.splice(i, 1); break; }
+    }
+  }
+  return picks; // [1st, 2nd, 3rd] indices
+}
+
+app.get('/api/horse', async (req, res) => {
+  try {
+    const db = await getDb();
+    const races = db.collection('horse_races');
+    const now = new Date();
+    // Find active or next race
+    let race = await races.findOne({ status: { $in: ['betting', 'running'] }, finishAt: { $gt: now } });
+    if (!race) {
+      // Create new race
+      const numHorses = 6, distIdx = Math.floor(Math.random() * 3);
+      const raceData = generateHorseRace(numHorses, distIdx);
+      const bettingEnds = new Date(now.getTime() + 20000); // 20s betting window
+      const finishAt = new Date(bettingEnds.getTime() + raceData.duration * 1000);
+      const r = await races.insertOne({ ...raceData, bets: [], status: 'betting', bettingEnds, finishAt, result: null, createdAt: now });
+      race = await races.findOne({ _id: r.insertedId });
+    }
+    res.json({ id: race._id.toString(), horses: race.horses, distLabel: race.distLabel, duration: race.duration,
+      status: race.status, bettingEnds: race.bettingEnds, finishAt: race.finishAt,
+      result: race.result, serverTime: now.toISOString() });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/horse', async (req, res) => {
+  const { action, nickname, token, raceId, betType, pick, amount } = req.body || {};
+  try {
+    const db = await getDb();
+    const col = db.collection('players');
+    const races = db.collection('horse_races');
+    const p = await col.findOne({ nickname, token });
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+
+    if (action === 'bet') {
+      const now = new Date();
+      const race = await races.findOne({ _id: new (require('mongodb').ObjectId)(raceId) });
+      if (!race) return res.status(404).json({ error: '레이스 없음' });
+      if (race.status !== 'betting' || now >= new Date(race.bettingEnds)) return res.status(400).json({ error: '베팅 마감' });
+      if (!['first', 'rank123'].includes(betType)) return res.status(400).json({ error: 'betType: first|rank123' });
+      const amt = BigInt(amount || '0');
+      if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
+      if (BigInt(p.chips) < amt) return res.status(400).json({ error: '칩 부족' });
+      // Remove existing bet by same user in this race
+      await races.updateOne({ _id: race._id }, { $pull: { bets: { nickname } } });
+      await races.updateOne({ _id: race._id }, { $push: { bets: { nickname, betType, pick, amount: amt.toString() } } });
+      await col.updateOne({ nickname }, { $set: { chips: (BigInt(p.chips) - amt).toString() } });
+      return res.json({ ok: true });
+    }
+
+    if (action === 'result') {
+      const race = await races.findOne({ _id: new (require('mongodb').ObjectId)(raceId) });
+      if (!race) return res.status(404).json({ error: '없음' });
+      // Trigger finish if time is up
+      if (race.status !== 'finished' && new Date() >= new Date(race.finishAt)) {
+        const result = runHorseRace(race.horses); // [1st,2nd,3rd] idx
+        await races.updateOne({ _id: race._id }, { $set: { status: 'finished', result } });
+        // Pay out winners
+        for (const bet of race.bets) {
+          let won = false, mult = 1;
+          if (bet.betType === 'first' && bet.pick[0] === result[0]) {
+            won = true; mult = race.horses[result[0]].payout;
+          } else if (bet.betType === 'rank123' &&
+            bet.pick[0] === result[0] && bet.pick[1] === result[1] && bet.pick[2] === result[2]) {
+            won = true; mult = race.horses[result[0]].payout * race.horses[result[1]].payout * 0.8;
+          }
+          if (won) {
+            const bp = await col.findOne({ nickname: bet.nickname });
+            if (bp) {
+              const payout = BigInt(Math.round(Number(bet.amount) * mult));
+              await col.updateOne({ nickname: bet.nickname }, { $set: { chips: (BigInt(bp.chips) + payout).toString() } });
+            }
+          }
+        }
+        return res.json({ result, horses: race.horses, bets: race.bets });
+      }
+      return res.json({ result: race.result, horses: race.horses, status: race.status, bets: race.bets });
+    }
+    res.status(404).json({ error: 'unknown action' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// KBO BASEBALL  /api/baseball
+// ═══════════════════════════════════════════════════════════
+// 당일 KBO 경기 가져오기 (데이터 없으면 mock)
+async function fetchKboGames() {
+  try {
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const r = await fetch(`https://www.koreabaseball.com/ws/Schedule.asmx/GetSchedule?leId=1&srId=0&seasonId=2025&gameDate=${today}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error('fetch failed');
+    const text = await r.text();
+    // Parse XML-ish response - simplified
+    const games = [];
+    const matches = [...text.matchAll(/<homeTeam>([^<]+)<\/homeTeam>.*?<awayTeam>([^<]+)<\/awayTeam>.*?<stadium>([^<]+)<\/stadium>/gs)];
+    for (const m of matches) games.push({ home: m[1], away: m[2], stadium: m[3], id: `${m[1]}vs${m[2]}` });
+    if (games.length) return games;
+  } catch(e) {}
+  // Fallback mock
+  const teams = ['KIA','삼성','LG','두산','KT','SSG','롯데','한화','NC','키움'];
+  const games = [];
+  for (let i = 0; i < teams.length; i += 2)
+    games.push({ home: teams[i], away: teams[i+1], id: `${teams[i]}vs${teams[i+1]}_mock` });
+  return games;
+}
+
+app.get('/api/baseball', async (req, res) => {
+  try {
+    const db = await getDb();
+    const today = new Date().toISOString().slice(0, 10);
+    const col = db.collection('baseball_games');
+    let games = await col.find({ date: today }).toArray();
+    if (!games.length) {
+      const fetched = await fetchKboGames();
+      for (const g of fetched) {
+        await col.updateOne({ id: g.id, date: today }, { $setOnInsert: { ...g, date: today, bets: [], result: null, status: 'open' } }, { upsert: true });
+      }
+      games = await col.find({ date: today }).toArray();
+    }
+    res.json(games.map(g => ({ id: g._id.toString(), home: g.home, away: g.away, status: g.status, result: g.result,
+      betCount: (g.bets || []).length })));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/baseball', async (req, res) => {
+  const { action, nickname, token, gameId, pick, amount } = req.body || {};
+  try {
+    const db = await getDb();
+    const col = db.collection('players');
+    const games = db.collection('baseball_games');
+    const p = await col.findOne({ nickname, token });
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+
+    if (action === 'bet') {
+      const game = await games.findOne({ _id: new (require('mongodb').ObjectId)(gameId) });
+      if (!game || game.status !== 'open') return res.status(400).json({ error: '베팅 불가' });
+      const amt = BigInt(amount || '0');
+      if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
+      if (BigInt(p.chips) < amt) return res.status(400).json({ error: '칩 부족' });
+      if (!['home', 'away', 'draw'].includes(pick)) return res.status(400).json({ error: 'pick: home|away|draw' });
+      await games.updateOne({ _id: game._id }, { $pull: { bets: { nickname } } });
+      await games.updateOne({ _id: game._id }, { $push: { bets: { nickname, pick, amount: amt.toString() } } });
+      await col.updateOne({ nickname }, { $set: { chips: (BigInt(p.chips) - amt).toString() } });
+      return res.json({ ok: true });
+    }
+
+    // Admin: set result
+    if (action === 'set_result') {
+      const admin = await col.findOne({ nickname, token });
+      if (!admin || admin.nickname !== '애플몬') return res.status(403).json({ error: '관리자만' });
+      const game = await games.findOne({ _id: new (require('mongodb').ObjectId)(gameId) });
+      if (!game) return res.status(404).json({ error: '없음' });
+      const result = pick; // 'home'|'away'|'draw'
+      await games.updateOne({ _id: game._id }, { $set: { status: 'finished', result } });
+      // Payout: winners share the loser pool proportionally
+      const winners = (game.bets || []).filter(b => b.pick === result);
+      const losers  = (game.bets || []).filter(b => b.pick !== result);
+      const loserPool = losers.reduce((s, b) => s + BigInt(b.amount), 0n);
+      const winnerTotal = winners.reduce((s, b) => s + BigInt(b.amount), 0n);
+      for (const bet of winners) {
+        const share = winnerTotal > 0n ? BigInt(bet.amount) * loserPool / winnerTotal : 0n;
+        const payout = BigInt(bet.amount) + share;
+        const bp = await col.findOne({ nickname: bet.nickname });
+        if (bp) await col.updateOne({ nickname: bet.nickname }, { $set: { chips: (BigInt(bp.chips) + payout).toString() } });
+      }
+      return res.json({ ok: true, winners: winners.length, loserPool: loserPool.toString() });
+    }
+    res.status(404).json({ error: 'unknown action' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// INVESTMENT  /api/invest
+// ═══════════════════════════════════════════════════════════
+// 투자: 다른 유저의 칩 잔액에 투자 → 그 유저 잔액 변동에 따라 수익/손실
+// investment doc: { investor, target, amount(원금), currentValue, createdAt, updatedAt }
+app.get('/api/invest', async (req, res) => {
+  const { nick, token } = req.query;
+  try {
+    const db = await getDb();
+    const p = await db.collection('players').findOne({ nickname: nick, token });
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+    const invs = await db.collection('investments').find({ investor: nick }).toArray();
+    res.json(invs.map(i => ({ id: i._id.toString(), target: i.target, amount: i.amount, currentValue: i.currentValue, createdAt: i.createdAt })));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/invest', async (req, res) => {
+  const { nickname, token, target, amount } = req.body || {};
+  try {
+    const db = await getDb();
+    const col = db.collection('players');
+    const p = await col.findOne({ nickname, token });
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+    if (nickname === target) return res.status(400).json({ error: '자기 자신 투자 불가' });
+    const targetUser = await col.findOne({ nickname: target });
+    if (!targetUser) return res.status(404).json({ error: '대상 없음' });
+    const amt = BigInt(amount || '0');
+    if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
+    if (BigInt(p.chips) < amt) return res.status(400).json({ error: '칩 부족' });
+    // Deduct from investor, add to target
+    await col.updateOne({ nickname }, { $set: { chips: (BigInt(p.chips) - amt).toString() } });
+    await col.updateOne({ nickname: target }, { $set: { chips: (BigInt(targetUser.chips) + amt).toString() } });
+    // Record investment
+    const now = new Date();
+    const baselineChips = BigInt(targetUser.chips) + amt;
+    await db.collection('investments').insertOne({
+      investor: nickname, target, amount: amt.toString(), currentValue: amt.toString(),
+      baselineTargetChips: baselineChips.toString(), createdAt: now, updatedAt: now,
+    });
+    // Send DM notification
+    const convs = db.collection('conversations');
+    const msgs = db.collection('messages');
+    let conv = await convs.findOne({ type: 'dm', participants: { $all: [nickname, target], $size: 2 } });
+    if (!conv) { const r = await convs.insertOne({ type: 'dm', participants: [nickname, target], lastRead: {}, createdAt: now, updatedAt: now }); conv = await convs.findOne({ _id: r.insertedId }); }
+    await msgs.insertOne({ convId: conv._id.toString(), sender: '__system__', type: 'text', content: `💰 ${nickname}님이 당신에게 ${amount}칩을 투자했습니다!`, createdAt: now });
+    await convs.updateOne({ _id: conv._id }, { $set: { updatedAt: now } });
+    res.json({ ok: true, newChips: (BigInt(p.chips) - amt).toString() });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// ADMIN  /api/admin
+// ═══════════════════════════════════════════════════════════
+const ADMIN_NICK = '애플몬';
+async function requireAdmin(col, nickname, token) {
+  const p = await col.findOne({ nickname, token });
+  return p && p.nickname === ADMIN_NICK ? p : null;
+}
+
+app.get('/api/admin', async (req, res) => {
+  const { action, nick, token, target } = req.query;
+  try {
+    const db = await getDb(); const col = db.collection('players');
+    const admin = await requireAdmin(col, nick, token);
+    if (!admin) return res.status(403).json({ error: '관리자만' });
+    if (action === 'users') {
+      const users = await col.find({}, { projection: { passwordHash: 0, salt: 0, token: 0 } }).sort({ lastLoginAt: -1 }).limit(200).toArray();
+      return res.json(users.map(u => ({ nickname: u.nickname, chips: u.chips, lastLoginAt: u.lastLoginAt, createdAt: u.createdAt, banned: u.banned, title: u.title, titleColor: u.titleColor })));
+    }
+    if (action === 'announcements') {
+      const msgs = db.collection('messages');
+      const anns = await msgs.find({ type: 'announcement' }).sort({ createdAt: -1 }).limit(50).toArray();
+      return res.json(anns);
+    }
+    res.status(404).json({ error: 'unknown action' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Public: get announcements
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const db = await getDb();
+    const msgs = db.collection('messages');
+    const anns = await msgs.find({ type: 'announcement' }).sort({ createdAt: -1 }).limit(20).toArray();
+    res.json(anns);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin', async (req, res) => {
+  const { action, nickname, token, target, amount, duration, title, titleColor, content } = req.body || {};
+  try {
+    const db = await getDb(); const col = db.collection('players');
+    const admin = await requireAdmin(col, nickname, token);
+    if (!admin) return res.status(403).json({ error: '관리자만' });
+    const now = new Date();
+
+    if (action === 'ban') {
+      if (!target) return res.status(400).json({ error: 'target required' });
+      const banUntil = duration ? new Date(now.getTime() + Number(duration) * 1000) : null;
+      await col.updateOne({ nickname: target }, { $set: { banned: true, banUntil } });
+      return res.json({ ok: true });
+    }
+    if (action === 'unban') {
+      await col.updateOne({ nickname: target }, { $set: { banned: false, banUntil: null } });
+      return res.json({ ok: true });
+    }
+    if (action === 'delete_account') {
+      await col.deleteOne({ nickname: target });
+      return res.json({ ok: true });
+    }
+    if (action === 'set_chips') {
+      await col.updateOne({ nickname: target }, { $set: { chips: String(amount) } });
+      return res.json({ ok: true });
+    }
+    if (action === 'set_title') {
+      await col.updateOne({ nickname: target }, { $set: { title: title || null, titleColor: titleColor || null } });
+      return res.json({ ok: true });
+    }
+    if (action === 'announce') {
+      // Send announcement to all users via DM + store as announcement
+      const msgs = db.collection('messages');
+      const ann = { sender: ADMIN_NICK, type: 'announcement', content: content?.trim(), createdAt: now };
+      await msgs.insertOne(ann);
+      // Also DM all 1:1 convs where admin is participant
+      const convs = db.collection('conversations');
+      const adminConvs = await convs.find({ type: 'dm', participants: ADMIN_NICK }).toArray();
+      for (const c of adminConvs) {
+        await msgs.insertOne({ convId: c._id.toString(), sender: ADMIN_NICK, type: 'announcement', content: content?.trim(), createdAt: now });
+        await convs.updateOne({ _id: c._id }, { $set: { updatedAt: now } });
+      }
+      return res.json({ ok: true });
+    }
+    if (action === 'dm_user') {
+      // DM specific user
+      const targetUser = await col.findOne({ nickname: target });
+      if (!targetUser) return res.status(404).json({ error: '없는 유저' });
+      const msgs = db.collection('messages');
+      const convs = db.collection('conversations');
+      let conv = await convs.findOne({ type: 'dm', participants: { $all: [ADMIN_NICK, target], $size: 2 } });
+      if (!conv) { const r = await convs.insertOne({ type: 'dm', participants: [ADMIN_NICK, target], lastRead: {}, createdAt: now, updatedAt: now }); conv = await convs.findOne({ _id: r.insertedId }); }
+      await msgs.insertOne({ convId: conv._id.toString(), sender: ADMIN_NICK, type: 'announcement', content: content?.trim(), createdAt: now });
+      await convs.updateOne({ _id: conv._id }, { $set: { updatedAt: now } });
+      return res.json({ ok: true });
+    }
+    res.status(404).json({ error: 'unknown action' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── 칭호 변경 (본인만 색상 변경) ──────────────────────────────────
+app.post('/api/title', async (req, res) => {
+  const { nickname, token, titleColor } = req.body || {};
+  try {
+    const db = await getDb(); const col = db.collection('players');
+    const p = await col.findOne({ nickname, token });
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+    if (!p.title) return res.status(400).json({ error: '칭호 없음' });
+    await col.updateOne({ nickname }, { $set: { titleColor } });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// 로그인 시 밴 체크 patch (login action에 추가)
+// 이미 login 라우트가 위에 있으므로 미들웨어로 처리
+app.use('/api/player', async (req, res, next) => {
+  if (req.query.action === 'login' && req.method === 'POST') {
+    // handled above, skip
+  }
+  next();
 });

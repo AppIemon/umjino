@@ -269,7 +269,6 @@ async function dmInvite(convId) {
 
 // ── 프로필 팝업 ────────────────────────────
 async function showProfile(nick) {
-  // 랭킹에서 해당 유저 정보 fetch
   let rankInfo = null;
   try {
     const res = await fetchT('/api/ranking?nick=' + encodeURIComponent(nick), null, 5000);
@@ -286,16 +285,208 @@ async function showProfile(nick) {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:7000';
   overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
   const isMe = nick === sessionNickname;
+  const investHTML = !isMe ? `
+    <div style="margin-top:.6rem;border-top:1px solid rgba(255,255,255,.1);padding-top:.6rem">
+      <div style="font-size:.78rem;color:#aaa;margin-bottom:.35rem">💹 투자하기</div>
+      <div style="display:flex;gap:.4rem;justify-content:center">
+        <input id="profileInvestAmt" class="slot-bet-inp" placeholder="투자액" style="width:110px">
+        <button class="btn-primary" onclick="doInvest('${nick}')">투자</button>
+      </div>
+    </div>` : '';
+
   overlay.innerHTML = `
-<div style="background:linear-gradient(135deg,#1a3a28,#0d2018);border:2px solid rgba(241,196,15,.4);border-radius:16px;padding:1.5rem;max-width:300px;width:88%;color:white;text-align:center">
-  <div style="font-size:3rem;margin-bottom:.4rem">👤</div>
-  <div style="font-size:1.3rem;font-weight:bold;color:#f1c40f;margin-bottom:.3rem">${escHtml(nick)}</div>
-  ${rankInfo ? `<div style="font-size:.85rem;color:#aaa">최고 칩: ${shortFmt(BigInt(rankInfo.maxChips || '0'))}</div>
-  <div style="font-size:.78rem;color:#666;margin-top:.15rem">랭킹 ${rankInfo.rank}위</div>` : '<div style="font-size:.78rem;color:#555">랭킹 없음</div>'}
-  <div style="display:flex;gap:.6rem;justify-content:center;margin-top:1rem;flex-wrap:wrap">
-    ${!isMe ? `<button class="btn-primary" onclick="document.getElementById('profileOverlay').remove();showDM('${escHtml(nick)}')">💬 DM</button>` : ''}
+<div style="background:linear-gradient(135deg,#1a3a28,#0d2018);border:2px solid rgba(241,196,15,.4);border-radius:16px;padding:1.5rem;max-width:320px;width:90%;color:white;text-align:center">
+  <div style="font-size:3rem;margin-bottom:.3rem">👤</div>
+  <div style="font-size:1.3rem;font-weight:bold;color:#f1c40f">${nick}</div>
+  ${rankInfo?.title ? `<div style="color:${rankInfo.titleColor||'#f1c40f'};font-size:.85rem;margin-bottom:.25rem">[${rankInfo.title}]${isMe ? ' <button onclick="changeMyTitleColor()" style="background:none;border:none;cursor:pointer;font-size:.7rem;color:#888">색상</button>' : ''}</div>` : ''}
+  ${rankInfo ? `<div style="font-size:.85rem;color:#aaa;margin-top:.3rem">최고 칩: ${shortFmt(BigInt(rankInfo.maxChips||'0'))}</div><div style="font-size:.78rem;color:#666;margin-top:.12rem">랭킹 ${rankInfo.rank}위</div>` : '<div style="font-size:.78rem;color:#555;margin-top:.3rem">랭킹 없음</div>'}
+  ${investHTML}
+  <div style="display:flex;gap:.6rem;justify-content:center;margin-top:.9rem;flex-wrap:wrap">
+    ${!isMe ? `<button class="btn-primary" onclick="document.getElementById('profileOverlay').remove();showDM('${nick}')">💬 DM</button>` : ''}
     <button class="btn-secondary" onclick="document.getElementById('profileOverlay').remove()">닫기</button>
   </div>
 </div>`;
   document.body.appendChild(overlay);
+}
+
+async function doInvest(target) {
+  const amtStr = document.getElementById('profileInvestAmt')?.value?.trim();
+  let amt; try { amt = BigInt(amtStr); } catch(e) { alert('금액 입력'); return; }
+  if (amt <= 0n) { alert('0보다 커야 함'); return; }
+  if (amt > chips) { alert('칩 부족'); return; }
+  try {
+    const res = await fetchT('/api/invest', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: sessionNickname, token: sessionToken, target, amount: amt.toString() }) }, 8000);
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || '오류'); return; }
+    chips = BigInt(d.newChips); chipDist = computeGreedyDist(chips);
+    updateChipsDisplay(); updateSlotChipsDisplay();
+    document.getElementById('profileOverlay')?.remove();
+    alert(target + '에게 ' + formatBig(amt) + '칩 투자 완료!');
+  } catch(e) { alert('오류'); }
+}
+
+// ═══════════════════════════════════════════
+// DM 추가 기능: 최근 플레이 저장/전송, 메시지 조작
+// ═══════════════════════════════════════════
+
+// ── 최근 플레이 저장 (항상 최대 10개) ─────────
+const RECENT_PLAYS_KEY = 'recentPlays';
+function saveRecentPlay(play) {
+  // play: { type, desc, amount, result, ts }
+  let plays = [];
+  try { plays = JSON.parse(localStorage.getItem(RECENT_PLAYS_KEY) || '[]'); } catch(e) {}
+  plays.unshift({ ...play, ts: Date.now() });
+  if (plays.length > 10) plays = plays.slice(0, 10);
+  localStorage.setItem(RECENT_PLAYS_KEY, JSON.stringify(plays));
+}
+function getRecentPlays() {
+  try { return JSON.parse(localStorage.getItem(RECENT_PLAYS_KEY) || '[]'); } catch(e) { return []; }
+}
+
+// ── 플레이 전송 팝업 ──────────────────────────
+function dmOpenSendPlay() {
+  if (!dmCurrentConv) return;
+  const plays = getRecentPlays();
+  const existing = document.getElementById('dmPlayOverlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'dmPlayOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:7200';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+<div style="background:#1a2a1a;border:2px solid rgba(46,204,113,.3);border-radius:14px;padding:1.2rem;max-width:360px;width:90%;color:white;max-height:70vh;overflow-y:auto">
+  <div style="font-weight:bold;color:#f1c40f;margin-bottom:.8rem">📊 최근 플레이 전송</div>
+  ${plays.length ? plays.map((p, i) => `
+  <div style="background:rgba(255,255,255,.07);border-radius:8px;padding:.5rem .7rem;margin-bottom:.4rem;cursor:pointer;transition:background .15s"
+       onclick="dmSendPlay(${i})" onmouseover="this.style.background='rgba(255,255,255,.13)'" onmouseout="this.style.background='rgba(255,255,255,.07)'">
+    <div style="font-size:.8rem;color:#2ecc71">${escHtml(p.type)}</div>
+    <div style="font-size:.75rem;color:#aaa">${escHtml(p.desc)}</div>
+    <div style="font-size:.7rem;color:#888">${new Date(p.ts).toLocaleString('ko-KR')}</div>
+  </div>`).join('') : '<div style="color:#555;font-size:.85rem">최근 플레이 없음</div>'}
+  <button class="btn-secondary" style="width:100%;margin-top:.7rem" onclick="document.getElementById('dmPlayOverlay').remove()">닫기</button>
+</div>`;
+  document.body.appendChild(overlay);
+}
+
+async function dmSendPlay(idx) {
+  const plays = getRecentPlays();
+  const p = plays[idx]; if (!p) return;
+  const content = `[플레이 공유] ${p.type}\n${p.desc}`;
+  document.getElementById('dmPlayOverlay')?.remove();
+  if (!dmCurrentConv) return;
+  try {
+    const res = await dmFetch('send', { convId: dmCurrentConv.id, content });
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || '오류'); return; }
+    const container = document.getElementById('dmMsgs');
+    if (container) {
+      container.insertAdjacentHTML('beforeend', dmMsgHTML(d));
+      container.scrollTop = container.scrollHeight;
+    }
+  } catch(e) { alert('오류'); }
+}
+
+// ── 메시지 컨텍스트 메뉴 (복사/삭제/수정) ─────
+let _ctxMsgId = null;
+function dmShowMsgCtx(e, msgId, isMe, content) {
+  e.preventDefault();
+  const existing = document.getElementById('dmMsgCtx');
+  if (existing) existing.remove();
+  _ctxMsgId = msgId;
+  const menu = document.createElement('div');
+  menu.id = 'dmMsgCtx';
+  menu.style.cssText = `position:fixed;left:${Math.min(e.clientX, window.innerWidth-160)}px;top:${Math.min(e.clientY, window.innerHeight-120)}px;background:#222;border:1px solid #444;border-radius:9px;padding:.35rem 0;z-index:8000;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.6)`;
+  const items = [
+    { label: '📋 복사', fn: `dmCopyMsg(${JSON.stringify(content)})` },
+    ...(isMe ? [
+      { label: '✏️ 수정', fn: `dmEditMsg(${JSON.stringify(msgId)}, ${JSON.stringify(content)})` },
+      { label: '🗑 삭제', fn: `dmDeleteMsg(${JSON.stringify(msgId)})`, danger: true },
+    ] : []),
+    { label: '✕ 닫기', fn: `document.getElementById('dmMsgCtx')?.remove()` },
+  ];
+  menu.innerHTML = items.map(it => `<div class="dm-ctx-item${it.danger?' danger':''}" onclick="${it.fn};document.getElementById('dmMsgCtx')?.remove()">${it.label}</div>`).join('');
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 10);
+}
+
+function dmCopyMsg(content) {
+  navigator.clipboard?.writeText(content).catch(() => {
+    const el = document.createElement('textarea');
+    el.value = content; document.body.appendChild(el); el.select();
+    document.execCommand('copy'); el.remove();
+  });
+}
+
+async function dmEditMsg(msgId, oldContent) {
+  const newContent = prompt('수정할 내용:', oldContent);
+  if (!newContent || newContent === oldContent) return;
+  try {
+    const res = await dmFetch('edit_msg', { msgId, content: newContent });
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || '오류'); return; }
+    await dmLoadMessages(false);
+    const container = document.getElementById('dmMsgs');
+    if (container) container.scrollTop = container.scrollHeight;
+  } catch(e) { alert('서버 오류'); }
+}
+
+async function dmDeleteMsg(msgId) {
+  if (!confirm('메시지를 삭제하시겠습니까?')) return;
+  try {
+    const res = await dmFetch('delete_msg', { msgId });
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || '오류'); return; }
+    await dmLoadMessages(false);
+    const container = document.getElementById('dmMsgs');
+    if (container) container.scrollTop = container.scrollHeight;
+  } catch(e) { alert('서버 오류'); }
+}
+
+// dmMsgHTML 오버라이드 — 우클릭/롱프레스 추가
+const _origDmMsgHTML = dmMsgHTML;
+function dmMsgHTML(m) {
+  const isMe = m.sender === sessionNickname;
+  const isSys = m.sender === '__system__';
+  if (isSys || m.type === 'transfer') return _origDmMsgHTML(m);
+  const time = new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  const mid = m._id?.toString() || '';
+  const safeContent = JSON.stringify(m.content || '');
+  const safeMid = JSON.stringify(mid);
+  const ctxAttr = `oncontextmenu="dmShowMsgCtx(event,${safeMid},${isMe},${safeContent})" ontouchstart="dmTouchStart(event,${safeMid},${isMe},${safeContent})" ontouchend="dmTouchEnd()"`;
+  const editedMark = m.edited ? '<span style="font-size:.58rem;color:#555;margin-left:.3rem">(수정됨)</span>' : '';
+  return `<div class="dm-msg ${isMe ? 'dm-msg-me' : 'dm-msg-other'}">
+    ${!isMe ? `<div class="dm-sender" onclick="showProfile('${escHtml(m.sender)}')" style="cursor:pointer">${escHtml(m.sender)}</div>` : ''}
+    <div class="dm-bubble" ${ctxAttr}>${escHtml(m.content)}${editedMark}</div>
+    <div class="dm-time">${time}</div>
+  </div>`;
+}
+
+// 롱프레스
+let _ltTimer = null;
+function dmTouchStart(e, mid, isMe, content) {
+  _ltTimer = setTimeout(() => { e.preventDefault(); dmShowMsgCtx(e.touches[0], mid, isMe, content); }, 500);
+}
+function dmTouchEnd() { clearTimeout(_ltTimer); }
+
+// dmRenderConvFrame 오버라이드 — 📊 버튼 추가
+const _origRenderConvFrame = dmRenderConvFrame;
+function dmRenderConvFrame(c) {
+  const others = c.participants ? c.participants.filter(x => x !== sessionNickname) : [];
+  const title = c.name || others.join(', ');
+  document.getElementById('dmPanel').innerHTML = `
+<div class="dm-header">
+  <button class="dm-back-btn" onclick="dmLoadInbox()">‹</button>
+  <span class="dm-header-title">${escHtml(title)}</span>
+  ${c.type === 'group' ? `<button class="dm-invite-btn" onclick="dmInvite('${escHtml(c.id)}')">+ 초대</button>` : ''}
+  <button class="dm-close-btn" onclick="closeDM()">✕</button>
+</div>
+<div class="dm-msgs" id="dmMsgs"><div class="dm-loading">불러오는 중...</div></div>
+<div class="dm-input-row">
+  <button class="dm-transfer-btn" title="최근 플레이 전송" onclick="dmOpenSendPlay()">📊</button>
+  <input class="dm-input" id="dmInput" placeholder="메시지 입력..." maxlength="500"
+    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dmSend()}">
+  <button class="dm-send-btn" onclick="dmSend()">전송</button>
+  ${c.type === 'dm' && others.length === 1 ? `<button class="dm-transfer-btn" onclick="dmOpenTransfer('${escHtml(c.id)}','${escHtml(others[0])}')">💸</button>` : ''}
+</div>`;
 }

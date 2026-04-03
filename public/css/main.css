@@ -296,3 +296,9 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .dm-transfer-btn{background:rgba(52,152,219,.2);border:1px solid rgba(52,152,219,.4);color:#3498db;padding:.4rem .65rem;border-radius:9px;cursor:pointer;font-size:1rem;transition:all .18s}
 .dm-transfer-btn:hover{background:rgba(52,152,219,.35)}
 .dm-loading,.dm-empty{text-align:center;color:#555;padding:1.2rem;font-size:.85rem}
+
+/* ── DM 컨텍스트 메뉴 ── */
+.dm-ctx-item{padding:.42rem .85rem;cursor:pointer;font-size:.85rem;color:#ddd;transition:background .12s}
+.dm-ctx-item:hover{background:rgba(255,255,255,.1)}
+.dm-ctx-item.danger{color:#e74c3c}
+.dm-ctx-item.danger:hover{background:rgba(231,76,60,.15)}
