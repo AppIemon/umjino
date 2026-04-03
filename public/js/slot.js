@@ -65,8 +65,7 @@ function removeSlotMachine(id) {
 function slotThrowChip(chip, e) {
   if (chip.value > chips) return;
   const key = chip.value.toString();
-  const _di = DISPLAY_CHIPS.findIndex(c => c.value === chip.value);
-  if ((chipDist[key] || 0n) === 0n) { if (!makeChange(_di)) return; }
+  if((chipDist[key]||0n)===0n){if(!makeChange(chip.idx))return;}
   chipDist[key] = (chipDist[key] || 0n) - 1n;
   chips -= chip.value; slotBet += chip.value;
   slotBetDist[key] = (slotBetDist[key] || 0n) + 1n;
