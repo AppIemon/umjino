@@ -8,30 +8,28 @@
 </head>
 <body>
 
-<nav class="main-nav">
-  <div class="nav-brand">🃏 엄지노</div>
-  <div class="nav-tabs" id="navTabs">
-    <div class="nav-tab-group">
-      <button class="nav-tab-group-btn active" onclick="switchTabGroup('play')">🎮 플레이</button>
-      <button class="nav-tab-group-btn" onclick="switchTabGroup('community')">👥 커뮤니티</button>
-      <button class="nav-tab-group-btn" onclick="switchTabGroup('admin')">⚙️ 관리</button>
+<nav class="main-nav" id="mainNav">
+  <div class="nav-row nav-row-top">
+    <div class="nav-brand">🃏 엄지노</div>
+    <div class="nav-group-tabs">
+      <button class="nav-group-btn active" data-group="play" onclick="switchTabGroup('play')">🎮 플레이</button>
+      <button class="nav-group-btn" data-group="community" onclick="switchTabGroup('community')">👥 커뮤니티</button>
+      <button class="nav-group-btn" data-group="admin" onclick="switchTabGroup('admin')">⚙️ 관리</button>
     </div>
-    <div class="nav-sub-tabs" id="navSubTabs">
-      <button class="nav-tab active" onclick="switchTab('poker')">🃏 포커</button>
-      <button class="nav-tab" onclick="switchTab('roulette')">🎡 룰렛</button>
-      <button class="nav-tab" onclick="switchTab('slot')">🎰 슬롯</button>
-      <button class="nav-tab" onclick="switchTab('pvp')">⚔️ 멀티</button>
-      <button class="nav-tab" onclick="switchTab('toto')">🏇 토토</button>
-      <button class="nav-tab" onclick="switchTab('dice')">🎲 주사위</button>
+    <div class="nav-actions">
+      <button class="nav-icon-btn" onclick="showDM()" style="position:relative" title="DM">
+        💬<span id="dmBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e74c3c;color:white;border-radius:50%;width:16px;height:16px;font-size:.58rem;align-items:center;justify-content:center;border:1px solid #0a2818"></span>
+      </button>
+      <button class="nav-icon-btn" id="musicButton" onclick="toggleMusic()" title="음악">🔇</button>
     </div>
   </div>
-  <div class="nav-actions">
-    <button class="nav-icon-btn" onclick="showBank()">🏦</button>
-    <button class="nav-icon-btn" onclick="showRanking()">🏆</button>
-    <button class="nav-icon-btn" onclick="showDM()" style="position:relative">
-      💬<span id="dmBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e74c3c;color:white;border-radius:50%;width:16px;height:16px;font-size:.6rem;align-items:center;justify-content:center;border:1px solid #111"></span>
-    </button>
-    <button class="nav-icon-btn" id="musicButton" onclick="toggleMusic()">🔇</button>
+  <div class="nav-row nav-row-sub" id="navSubTabs">
+    <button class="nav-sub-btn active" data-tab="poker" onclick="switchTab('poker')">🃏 포커</button>
+    <button class="nav-sub-btn" data-tab="roulette" onclick="switchTab('roulette')">🎡 룰렛</button>
+    <button class="nav-sub-btn" data-tab="slot" onclick="switchTab('slot')">🎰 슬롯</button>
+    <button class="nav-sub-btn" data-tab="pvp" onclick="switchTab('pvp')">⚔️ 멀티</button>
+    <button class="nav-sub-btn" data-tab="toto" onclick="switchTab('toto')">🏇 토토</button>
+    <button class="nav-sub-btn" data-tab="dice" onclick="switchTab('dice')">🎲 주사위</button>
   </div>
 </nav>
 
@@ -39,8 +37,11 @@
 <div class="ticket-count" id="ticketCount">🎫 취소권 <span id="ticketNum">0</span></div>
 
 <audio id="bgMusic" loop><source src="./music.mp3" type="audio/mpeg"></audio>
-<audio id="bgMusicRoulette" loop><source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" type="audio/mpeg"></audio>
-<audio id="bgMusicSlot" loop><source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" type="audio/mpeg"></audio>
+<audio id="bgMusicRoulette" loop><source src="./music-roulette.mp3" type="audio/mpeg"></audio>
+<audio id="bgMusicSlot" loop><source src="./music-slot.mp3" type="audio/mpeg"></audio>
+<audio id="bgMusicPvp" loop><source src="./music-pvp.mp3" type="audio/mpeg"></audio>
+<audio id="bgMusicToto" loop><source src="./music-toto.mp3" type="audio/mpeg"></audio>
+<audio id="bgMusicDice" loop><source src="./music-dice.mp3" type="audio/mpeg"></audio>
 
 <!-- POKER -->
 <div class="tab-page active" id="tabPoker">
@@ -253,19 +254,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="bankModal" onclick="if(event.target===this)closeBank()">
-  <div class="bank-modal">
-    <h2>🏦 은행</h2>
-    <div class="bank-row"><span class="bank-label">내 잔액</span><span class="bank-value" id="bankHandChips">-</span></div>
-    <div class="bank-row"><span class="bank-label">은행 잔액</span><span class="bank-value" id="bankBalance">-</span></div>
-    <div class="bank-row"><span class="bank-label">이자율</span><span class="bank-value">1% / 일</span></div>
-    <div class="bank-row" id="bankUnlockRow" style="display:none"><span class="bank-label">출금 가능까지</span><span class="bank-value" id="bankUnlockTime">-</span></div>
-    <div class="bank-input-row"><input class="bank-input" id="bankDepositInput" type="text" placeholder="입금액"><button class="btn-bank" id="bankDepositBtn" onclick="bankDeposit()">입금</button></div>
-    <div class="bank-input-row" style="margin-top:.38rem"><button class="btn-bank btn-withdraw" id="bankWithdrawBtn" onclick="bankWithdraw()" style="width:100%">출금 (전액)</button></div>
-    <div class="bank-notice">입금 후 24시간 뒤 출금 가능 · 이자 1%/일</div>
-    <div style="margin-top:.7rem;text-align:center"><button class="btn-secondary" onclick="closeBank()">닫기</button></div>
-  </div>
-</div>
 
 <div class="modal-overlay" id="rankingModal" onclick="if(event.target===this)closeRanking()">
   <div class="ranking-modal">

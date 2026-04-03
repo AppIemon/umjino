@@ -13,7 +13,10 @@ const PLAYER_API='/api/player';
 let sessionNickname=null,sessionToken=null;
 
 // ── Tab music map ────────────────────────────
-const TAB_MUSIC={poker:'bgMusic',roulette:'bgMusicRoulette',slot:'bgMusicSlot',pvp:'bgMusic'};
+const TAB_MUSIC={
+  poker:'bgMusic',roulette:'bgMusicRoulette',slot:'bgMusicSlot',
+  pvp:'bgMusicPvp',toto:'bgMusicToto',dice:'bgMusicDice'
+};
 
 // ── Network ──────────────────────────────────
 async function fetchT(url,opts,ms){
@@ -69,37 +72,42 @@ const TAB_GROUPS = {
 const PLAY_TABS = ['poker','roulette','slot','pvp','toto','dice'];
 
 function switchTabGroup(group) {
-  document.querySelectorAll('.nav-tab-group-btn').forEach((el,i) => el.classList.toggle('active', ['play','community','admin'][i]===group));
-  const subTabs = document.getElementById('navSubTabs');
+  document.querySelectorAll('.nav-group-btn').forEach(el=>el.classList.toggle('active',el.dataset.group===group));
+  const subRow = document.getElementById('navSubTabs');
   if (group === 'play') {
-    subTabs.style.display = '';
-    switchTab(currentTab && PLAY_TABS.includes(currentTab) ? currentTab : 'poker');
+    subRow.style.display = '';
+    document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
+    const t = currentTab && PLAY_TABS.includes(currentTab) ? currentTab : 'poker';
+    _activateTab(t);
   } else {
-    subTabs.style.display = 'none';
-    document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
-    const tabId = group === 'community' ? 'tabCommunity' : 'tabAdmin';
+    subRow.style.display = 'none';
+    document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
+    const tabId = group==='community' ? 'tabCommunity' : 'tabAdmin';
     document.getElementById(tabId)?.classList.add('active');
-    if (group === 'community') loadCommunityTab();
-    if (group === 'admin') renderAdminTab();
+    if(group==='community') loadCommunityTab();
+    if(group==='admin') renderAdminTab();
   }
+}
+
+function _activateTab(name){
+  const tabEl=document.getElementById('tab'+name[0].toUpperCase()+name.slice(1));
+  if(tabEl)tabEl.classList.add('active');
+  document.querySelectorAll('.nav-sub-btn').forEach(el=>el.classList.toggle('active',el.dataset.tab===name));
 }
 
 function switchTab(name){
   if(currentTab===name)return;sfxTabSwitch();
   if(isMusicPlaying){
-    document.getElementById(TAB_MUSIC[currentTab]||'bgMusic').pause();
+    const old=document.getElementById(TAB_MUSIC[currentTab]||'bgMusic');
+    old?.pause();
     const nm=document.getElementById(TAB_MUSIC[name]||'bgMusic');
-    nm.volume=0.5;nm.play().catch(()=>{});
+    if(nm){nm.volume=0.5;nm.play().catch(()=>{});}
   }
   document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
-  const tabEl = document.getElementById('tab'+name[0].toUpperCase()+name.slice(1));
-  if (tabEl) tabEl.classList.add('active');
-  const tabIdx = PLAY_TABS.indexOf(name);
-  if (tabIdx >= 0) document.querySelectorAll('.nav-tab')[tabIdx]?.classList.add('active');
+  _activateTab(name);
   currentTab=name;
   if(name==='roulette'){buildRlTable();updateRlChipRow();if(rlJoined)rlStartPolling();}
-  if(name==='slot')updateSlotChipsDisplay();
+  if(name==='slot'){updateSlotChipsDisplay();if(typeof renderSlotChipStacks==='function')renderSlotChipStacks();}
   if(name==='toto')renderHorseTab();
   if(name==='dice')renderDiceUI();
 }
@@ -362,40 +370,12 @@ async function reloadMyChips(){
   }catch(e){}
 }
 
-// ── Bank ─────────────────────────────────────
-function showBank(){if(!sessionNickname){document.getElementById('authModal').classList.add('show');return}refreshBankUI();document.getElementById('bankModal').classList.add('show')}
-function closeBank(){document.getElementById('bankModal').classList.remove('show')}
-function refreshBankUI(){
-  document.getElementById('bankHandChips').textContent=formatBig(chips)+' 칩';
-  const bamt=bankData?.amount?BigInt(bankData.amount):0n;
-  document.getElementById('bankBalance').textContent=formatBig(bamt)+' 칩';
-  const unlockRow=document.getElementById('bankUnlockRow'),wdBtn=document.getElementById('bankWithdrawBtn');
-  if(bankData?.depositedAt){
-    const ms=Date.now()-new Date(bankData.depositedAt).getTime();
-    if(ms<86400000){const hrs=Math.ceil((86400000-ms)/3600000);unlockRow.style.display='flex';document.getElementById('bankUnlockTime').textContent=hrs+'시간 후';wdBtn.disabled=true;wdBtn.textContent=`출금 불가 (${hrs}h)`;}
-    else{unlockRow.style.display='none';wdBtn.disabled=bamt===0n;wdBtn.textContent='출금 (전액)';}
-  }else{unlockRow.style.display='none';wdBtn.disabled=true;wdBtn.textContent='출금 (잔액 없음)';}
-}
-async function bankDeposit(){
-  const raw=document.getElementById('bankDepositInput').value.trim();if(!raw)return;
-  let amt;try{amt=BigInt(raw)}catch{alert('숫자 입력');return}
-  if(amt<=0n||amt>chips){alert('잔액 부족');return}
-  const btn=document.getElementById('bankDepositBtn');btn.disabled=true;
-  try{
-    const res=await fetchT(PLAYER_API+'?action=bank-deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:sessionNickname,token:sessionToken,amount:amt.toString()})});
-    const data=await res.json();if(!res.ok){alert(data.error||'오류');btn.disabled=false;return}
-    chips=BigInt(data.chips);bankData=data.bank;chipDist=computeGreedyDist(chips);
-    document.getElementById('bankDepositInput').value='';sfxChip();updateChipsDisplay();updateBetDisplay();refreshBankUI();
-  }catch(e){alert('서버 오류')}btn.disabled=false;
-}
-async function bankWithdraw(){
-  const btn=document.getElementById('bankWithdrawBtn');btn.disabled=true;
-  try{
-    const res=await fetchT(PLAYER_API+'?action=bank-withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:sessionNickname,token:sessionToken})});
-    const data=await res.json();if(!res.ok){alert(data.error||'오류');btn.disabled=false;return}
-    chips=BigInt(data.chips);bankData=null;chipDist=computeGreedyDist(chips);sfxWin();updateChipsDisplay();updateBetDisplay();refreshBankUI();
-  }catch(e){alert('서버 오류');btn.disabled=false}
-}
+// ── Bank (removed) ──────────────────────────
+function showBank(){}
+function closeBank(){}
+function refreshBankUI(){}
+async function bankDeposit(){}
+async function bankWithdraw(){}
 
 // ── Ranking ──────────────────────────────────
 async function showRanking(){
