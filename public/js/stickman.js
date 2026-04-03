@@ -20,6 +20,9 @@ function createStickmanEl(nick){
 <line x1="11" y1="32" x2="4" y2="48" stroke="${color}" stroke-width="1.8" stroke-linecap="round" class="ll"/>
 <line x1="11" y1="32" x2="18" y2="48" stroke="${color}" stroke-width="1.8" stroke-linecap="round" class="lr"/>`;
   wrap.appendChild(nameEl);wrap.appendChild(svg);
+  // 클릭 시 프로필
+  wrap.style.cursor='pointer';
+  wrap.onclick=()=>{ if(typeof showProfile==='function') showProfile(nick); };
   return wrap;
 }
 function animateStickman(el,t){

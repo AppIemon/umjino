@@ -1021,3 +1021,172 @@ if (process.env.VERCEL) {
     process.exit(1);
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DM System
+// ═══════════════════════════════════════════════════════════════════════════
+// Collections:
+//   conversations: { _id, type:'dm'|'group', participants:[], name?, createdAt, updatedAt }
+//   messages: { _id, convId, sender, type:'text'|'transfer', content, amount?, createdAt }
+
+async function dmAuth(col, nickname, token) {
+  const p = await col.findOne({ nickname, token });
+  return p || null;
+}
+
+// GET /api/dm
+app.get('/api/dm', async (req, res) => {
+  const { action, nick, token, convId, before } = req.query;
+  try {
+    const db = await getDb();
+    const players = db.collection('players');
+    const p = await dmAuth(players, nick, token);
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+
+    // 미읽 개수
+    if (action === 'unread') {
+      const convs = db.collection('conversations');
+      const msgs = db.collection('messages');
+      const myConvs = await convs.find({ participants: nick }).toArray();
+      let total = 0;
+      for (const c of myConvs) {
+        const lastRead = (c.lastRead && c.lastRead[nick]) ? new Date(c.lastRead[nick]) : new Date(0);
+        const cnt = await msgs.countDocuments({ convId: c._id.toString(), createdAt: { $gt: lastRead }, sender: { $ne: nick } });
+        total += cnt;
+      }
+      return res.json({ unread: total });
+    }
+
+    // 대화 목록
+    if (action === 'inbox') {
+      const convs = db.collection('conversations');
+      const msgs = db.collection('messages');
+      const myConvs = await convs.find({ participants: nick }).sort({ updatedAt: -1 }).limit(50).toArray();
+      const result = [];
+      for (const c of myConvs) {
+        const lastMsg = await msgs.findOne({ convId: c._id.toString() }, { sort: { createdAt: -1 } });
+        const lastRead = (c.lastRead && c.lastRead[nick]) ? new Date(c.lastRead[nick]) : new Date(0);
+        const unread = await msgs.countDocuments({ convId: c._id.toString(), createdAt: { $gt: lastRead }, sender: { $ne: nick } });
+        result.push({
+          id: c._id.toString(),
+          type: c.type,
+          name: c.name || c.participants.filter(x => x !== nick).join(', '),
+          participants: c.participants,
+          lastMsg: lastMsg ? { sender: lastMsg.sender, content: lastMsg.type === 'transfer' ? `💸 ${lastMsg.amount}칩 전송` : lastMsg.content, createdAt: lastMsg.createdAt } : null,
+          unread,
+        });
+      }
+      return res.json(result);
+    }
+
+    // 메시지 기록
+    if (action === 'history') {
+      if (!convId) return res.status(400).json({ error: 'missing convId' });
+      const convs = db.collection('conversations');
+      const msgs = db.collection('messages');
+      const conv = await convs.findOne({ _id: new (require('mongodb').ObjectId)(convId) });
+      if (!conv || !conv.participants.includes(nick)) return res.status(403).json({ error: '접근 불가' });
+      const query = { convId };
+      if (before) query.createdAt = { $lt: new Date(before) };
+      const msgList = await msgs.find(query).sort({ createdAt: -1 }).limit(50).toArray();
+      // 읽음 처리
+      await convs.updateOne({ _id: conv._id }, { $set: { [`lastRead.${nick}`]: new Date() } });
+      return res.json(msgList.reverse());
+    }
+
+    res.status(404).json({ error: 'unknown action' });
+  } catch(e) { console.error('GET /api/dm', e); res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/dm
+app.post('/api/dm', async (req, res) => {
+  const { action } = req.query;
+  const body = req.body || {};
+  try {
+    const db = await getDb();
+    const players = db.collection('players');
+    const convs = db.collection('conversations');
+    const msgs = db.collection('messages');
+    const now = new Date();
+
+    const p = await dmAuth(players, body.nickname, body.token);
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+    const myNick = body.nickname;
+
+    // DM 시작 또는 기존 대화 반환
+    if (action === 'create') {
+      const { target } = body;
+      if (!target || target === myNick) return res.status(400).json({ error: '잘못된 대상' });
+      const targetUser = await players.findOne({ nickname: target });
+      if (!targetUser) return res.status(404).json({ error: '없는 사용자' });
+      // 기존 1:1 대화 찾기
+      let conv = await convs.findOne({ type: 'dm', participants: { $all: [myNick, target], $size: 2 } });
+      if (!conv) {
+        const r = await convs.insertOne({ type: 'dm', participants: [myNick, target], lastRead: {}, createdAt: now, updatedAt: now });
+        conv = await convs.findOne({ _id: r.insertedId });
+      }
+      return res.json({ convId: conv._id.toString(), participants: conv.participants });
+    }
+
+    // 그룹 DM 생성
+    if (action === 'create_group') {
+      const { targets, name } = body;
+      if (!targets || !targets.length) return res.status(400).json({ error: 'targets required' });
+      const participants = [myNick, ...targets.filter(t => t !== myNick)];
+      const r = await convs.insertOne({ type: 'group', name: name || (participants.join(', ')), participants, lastRead: {}, createdAt: now, updatedAt: now });
+      return res.json({ convId: r.insertedId.toString(), participants });
+    }
+
+    // 그룹에 초대
+    if (action === 'invite') {
+      const { convId, target } = body;
+      if (!convId || !target) return res.status(400).json({ error: 'missing fields' });
+      const conv = await convs.findOne({ _id: new (require('mongodb').ObjectId)(convId) });
+      if (!conv || !conv.participants.includes(myNick)) return res.status(403).json({ error: '접근 불가' });
+      if (conv.type !== 'group') return res.status(400).json({ error: '1:1은 초대 불가' });
+      if (conv.participants.includes(target)) return res.status(400).json({ error: '이미 참여 중' });
+      await convs.updateOne({ _id: conv._id }, { $push: { participants: target }, $set: { updatedAt: now } });
+      // 시스템 메시지
+      await msgs.insertOne({ convId, sender: '__system__', type: 'text', content: `${target}님이 초대됐습니다.`, createdAt: now });
+      return res.json({ ok: true });
+    }
+
+    // 메시지 전송
+    if (action === 'send') {
+      const { convId, content } = body;
+      if (!convId || !content?.trim()) return res.status(400).json({ error: 'missing fields' });
+      const conv = await convs.findOne({ _id: new (require('mongodb').ObjectId)(convId) });
+      if (!conv || !conv.participants.includes(myNick)) return res.status(403).json({ error: '접근 불가' });
+      const msg = { convId, sender: myNick, type: 'text', content: content.trim().slice(0, 1000), createdAt: now };
+      const r = await msgs.insertOne(msg);
+      await convs.updateOne({ _id: conv._id }, { $set: { updatedAt: now } });
+      return res.json({ ...msg, _id: r.insertedId.toString() });
+    }
+
+    // 토큰 전송
+    if (action === 'transfer') {
+      const { convId, target, amount } = body;
+      if (!convId || !target || !amount) return res.status(400).json({ error: 'missing fields' });
+      const conv = await convs.findOne({ _id: new (require('mongodb').ObjectId)(convId) });
+      if (!conv || !conv.participants.includes(myNick)) return res.status(403).json({ error: '접근 불가' });
+      if (!conv.participants.includes(target)) return res.status(400).json({ error: '대화 참여자가 아님' });
+      const amt = BigInt(amount);
+      if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
+      const sender = await players.findOne({ nickname: myNick });
+      if (BigInt(sender.chips || '0') < amt) return res.status(400).json({ error: '칩 부족' });
+      // 송금
+      const newSenderChips = (BigInt(sender.chips) - amt).toString();
+      const targetDoc = await players.findOne({ nickname: target });
+      const newTargetChips = (BigInt(targetDoc?.chips || '0') + amt).toString();
+      await players.updateOne({ nickname: myNick }, { $set: { chips: newSenderChips } });
+      await players.updateOne({ nickname: target }, { $set: { chips: newTargetChips } });
+      // 메시지 기록
+      const msg = { convId, sender: myNick, type: 'transfer', content: `${target}에게 ${amount}칩 전송`, amount, target, createdAt: now };
+      const r = await msgs.insertOne(msg);
+      await convs.updateOne({ _id: conv._id }, { $set: { updatedAt: now } });
+      return res.json({ ...msg, _id: r.insertedId.toString(), newChips: newSenderChips });
+    }
+
+    res.status(404).json({ error: 'unknown action' });
+  } catch(e) { console.error('POST /api/dm', e); res.status(500).json({ error: e.message }); }
+});

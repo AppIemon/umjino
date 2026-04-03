@@ -19,6 +19,9 @@
   <div class="nav-actions">
     <button class="nav-icon-btn" onclick="showBank()">🏦</button>
     <button class="nav-icon-btn" onclick="showRanking()">🏆</button>
+    <button class="nav-icon-btn" onclick="showDM()" style="position:relative">
+      💬<span id="dmBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e74c3c;color:white;border-radius:50%;width:16px;height:16px;font-size:.6rem;align-items:center;justify-content:center;border:1px solid #111"></span>
+    </button>
     <button class="nav-icon-btn" id="musicButton" onclick="toggleMusic()">🔇</button>
   </div>
 </nav>
@@ -223,6 +226,11 @@
   </div>
 </div>
 
+<!-- DM overlay -->
+<div class="modal-overlay" id="dmOverlay" onclick="if(event.target===this)closeDM()">
+  <div id="dmPanel" class="dm-panel"></div>
+</div>
+
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loading-spinner"></div>
   <div class="loading-msg" id="loadingMsg">로그인 중...</div>
@@ -236,6 +244,7 @@
 <script src="./js/slot.js"></script>
 <script src="./js/stickman.js"></script>
 <script src="./js/pvp.js"></script>
+<script src="./js/dm.js"></script>
 <script>
 // Prevent context menu on game elements (stops long-press text selection on mobile)
 document.addEventListener('contextmenu', e=>{

@@ -188,6 +188,8 @@ function applyServerState(data){
   updateChipsDisplay();updateBetDisplay();updateStatsDisplay();updateTicketUI();updateSlotChipsDisplay();updateRlChipRow();
   restoreGameUI();restoreBetDisplay();
   startPresence();
+  if(typeof dmStartPoll==='function')dmStartPoll();
+  if(typeof dmRefreshBadge==='function')dmRefreshBadge();
 }
 
 function restoreGameUI(){
@@ -285,7 +287,7 @@ async function showRanking(){
     const rows=data.top100||data,surrounding=data.surrounding||[],userRank=data.userRank||0;
     if(!Array.isArray(rows)||!rows.length){document.getElementById('rankingContent').innerHTML='<div class="ranking-empty">아직 랭킹 없음</div>';return}
     const medals=['🥇','🥈','🥉'];
-    const rr=row=>{const isMe=nickname&&row.nickname===nickname,medal=row.rank<=3?medals[row.rank-1]:'';return`<tr class="rank-${row.rank}${isMe?' me-row':''}"><td>${medal}${row.rank}</td><td>${escHtml(row.nickname)}${isMe?' 👈':''}</td><td>${shortFmt(BigInt(row.maxChips||'0'))}</td></tr>`};
+    const rr=row=>{const isMe=nickname&&row.nickname===nickname,medal=row.rank<=3?medals[row.rank-1]:'';return`<tr class="rank-${row.rank}${isMe?' me-row':''}"><td>${medal}${row.rank}</td><td><span style="cursor:pointer;text-decoration:underline dotted" onclick="closeRanking();showProfile('${escHtml(row.nickname)}')">${escHtml(row.nickname)}</span>${isMe?' 👈':''}</td><td>${shortFmt(BigInt(row.maxChips||'0'))}</td></tr>`};
     let html='<table class="ranking-table"><thead><tr><th>순위</th><th>닉네임</th><th>최고 칩</th></tr></thead><tbody>';
     rows.forEach(row=>html+=rr(row));
     if(surrounding.length&&userRank>100){html+=`<tr><td colspan="3" style="text-align:center;color:#444;font-size:.78rem">・・・</td></tr>`;surrounding.forEach(row=>html+=rr(row));}
