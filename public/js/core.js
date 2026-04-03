@@ -152,7 +152,7 @@ async function loadCommunityRanking() {
     const rr = row => {
       const isMe = nickname && row.nickname === nickname;
       const medal = row.rank<=3 ? medals[row.rank-1] : '';
-      return `<tr class="rank-${row.rank}${isMe?' me-row':''}"><td>${medal}${row.rank}</td><td><span style="cursor:pointer;text-decoration:underline dotted" onclick="showProfile('${escHtml(row.nickname)}')">${escHtml(row.nickname)}</span>${isMe?' 👈':''}</td><td>${shortFmt(BigInt(row.maxChips||'0'))}</td></tr>`;
+      return `<tr class="rank-${row.rank}${isMe?' me-row':''}"><td>${medal}${row.rank}</td><td><span style="cursor:pointer;text-decoration:underline dotted" onclick="showProfile('${escHtml(row.nickname)}')">${escHtml(row.nickname)}</span>${isMe?' 👈':''}</td><td>${rankChipHTML(BigInt(row.maxChips||'0'))}</td></tr>`;
     };
     let html = '<table class="ranking-table"><thead><tr><th>순위</th><th>닉네임</th><th>최고 칩</th></tr></thead><tbody>';
     rows.forEach(row => html += rr(row));
@@ -239,7 +239,10 @@ function getDisplayChips() {
 }
 
 function _makeChipStack(chip, cnt, onClickFn) {
-  const s = document.createElement('div'); s.className = 'chip-stack'; s.innerHTML = createChipSVG(chip);
+  const tier = chip.tier || 0;
+  const s = document.createElement('div');
+  s.className = 'chip-stack' + (tier >= 3 ? ' tier3' : tier === 2 ? ' tier2' : '');
+  s.innerHTML = createChipSVG(chip);
   s.title = formatBig(chip.value) + ' × ' + cnt;
   if (cnt > 1n) { const b = document.createElement('div'); b.className = 'chip-count'; b.textContent = cnt > 99n ? '99+' : cnt.toString(); s.appendChild(b); }
   s.onclick = e => onClickFn(chip, e);
@@ -387,7 +390,7 @@ async function showRanking(){
     const rows=data.top100||data,surrounding=data.surrounding||[],userRank=data.userRank||0;
     if(!Array.isArray(rows)||!rows.length){document.getElementById('rankingContent').innerHTML='<div class="ranking-empty">아직 랭킹 없음</div>';return}
     const medals=['🥇','🥈','🥉'];
-    const rr=row=>{const isMe=nickname&&row.nickname===nickname,medal=row.rank<=3?medals[row.rank-1]:'';return`<tr class="rank-${row.rank}${isMe?' me-row':''}"><td>${medal}${row.rank}</td><td><span style="cursor:pointer;text-decoration:underline dotted" onclick="closeRanking();showProfile('${escHtml(row.nickname)}')">${escHtml(row.nickname)}</span>${isMe?' 👈':''}</td><td>${shortFmt(BigInt(row.maxChips||'0'))}</td></tr>`};
+    const rr=row=>{const isMe=nickname&&row.nickname===nickname,medal=row.rank<=3?medals[row.rank-1]:'';return`<tr class="rank-${row.rank}${isMe?' me-row':''}"><td>${medal}${row.rank}</td><td><span style="cursor:pointer;text-decoration:underline dotted" onclick="closeRanking();showProfile('${escHtml(row.nickname)}')">${escHtml(row.nickname)}</span>${isMe?' 👈':''}</td><td>${rankChipHTML(BigInt(row.maxChips||'0'))}</td></tr>`};
     let html='<table class="ranking-table"><thead><tr><th>순위</th><th>닉네임</th><th>최고 칩</th></tr></thead><tbody>';
     rows.forEach(row=>html+=rr(row));
     if(surrounding.length&&userRank>100){html+=`<tr><td colspan="3" style="text-align:center;color:#444;font-size:.78rem">・・・</td></tr>`;surrounding.forEach(row=>html+=rr(row));}

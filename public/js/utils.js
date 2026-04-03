@@ -64,23 +64,27 @@ const FMT_UNITS=[
 const MURYANGDAESU = pow10(68);
 // 1+ = 10000무량대수 = 10^72
 const PLUS1 = pow10(72);
+// MAX = 1000무량대수++ = (10^72)^2 * 10^71 — 사실상 무한대 취급
 
-// + 표기: 1+ = 10^72, 1++ = 10^76 등
+// + 표기 시스템
+// 1+  = 10^72  (1만 무량대수)
+// 1++ = 10^144 (1만 무량대수의 1만 무량대수배)
+// 등 등...
+
+function _countPlus(n) {
+  // n이 몇 번 PLUS1로 나눠지는지 (정수 로그)
+  let count = 0, v = n;
+  while (v >= PLUS1) { v = v / PLUS1; count++; }
+  return { count, remainder: v };
+}
+
+function _plusStr(count) {
+  return count <= 3 ? '+'.repeat(count) : ('+'.repeat(3) + String(count));
+}
 function plusNotation(n) {
-  // n >= 10^72
-  let rem = n, plusCount = 0, base = 1n;
-  // 몇 번 10^72를 나눌 수 있는지
-  let div = PLUS1;
-  while (rem >= div) { plusCount++; div *= PLUS1; }
-  // 실제 값: n / PLUS1^plusCount
-  let divisor = 1n;
-  for (let i = 0; i < plusCount; i++) divisor *= PLUS1;
-  const q = n / divisor;
-  const r = n % divisor;
-  const plusStr = '+'.repeat(plusCount);
-  // q를 무량대수 이하로 포맷
-  const qFmt = formatBigBelow(q);
-  return qFmt + plusStr + (r > 0n ? ' ...' : '');
+  if (n < PLUS1) return formatBigBelow(n);
+  const { count, remainder } = _countPlus(n);
+  return formatBigBelow(remainder) + _plusStr(count);
 }
 
 // 무량대수 이하 포맷 (재귀 방지용)
@@ -101,13 +105,15 @@ function formatBig(n) {
 function shortFmt(n) {
   if (n < 0n) return '-' + shortFmt(-n);
   if (n >= PLUS1) {
-    let plusCount = 0, div = PLUS1;
-    while (n >= div) { plusCount++; div *= PLUS1; }
-    let divisor = 1n;
-    for (let i = 0; i < plusCount; i++) divisor *= PLUS1;
-    const q = n / divisor;
-    const plusStr = '+'.repeat(plusCount);
-    return shortFmt(q) + plusStr;
+    const { count, remainder } = _countPlus(n);
+    const plusStr = '+'.repeat(count);
+    // remainder를 단위로 표시
+    if (remainder < 10000n) return remainder.toString() + plusStr;
+    for (const [v, nm] of FMT_UNITS) if (remainder >= v) {
+      const q = remainder / v;
+      return (remainder % v > 0n ? '약 ' : '') + q + nm + plusStr;
+    }
+    return remainder.toString() + plusStr;
   }
   if (n < 10000n) return n.toString();
   for (const [v, nm] of FMT_UNITS) if (n >= v) {
@@ -281,4 +287,22 @@ function getHandRank(hand){
   if(cv[0]===2&&cv[1]===2)return p('투페어',3);
   if(cv[0]===2)return p('원페어',3,2);
   return p('노페어',0);
+}
+
+// ++ 개수 기반 HTML span (빛남 효과)
+function shortFmtHTML(n) {
+  const s = shortFmt(n);
+  const plusCount = (s.match(/\+/g) || []).length;
+  if (plusCount === 0) return s;
+  const cls = plusCount >= 4 ? 'plus4' : plusCount === 3 ? 'plus3' : plusCount === 2 ? 'plus2' : 'plus1';
+  return `<span class="${cls}">${s}</span>`;
+}
+
+// 랭킹 테이블용 (배경 안 깨지게)
+function rankChipHTML(n) {
+  const s = shortFmt(n);
+  const plusCount = (s.match(/\+/g) || []).length;
+  if (plusCount === 0) return s;
+  const cls = `rank-val-plus${Math.min(plusCount, 3)}`;
+  return `<span class="${cls}">${s}</span>`;
 }

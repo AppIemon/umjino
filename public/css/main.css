@@ -488,3 +488,402 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .bb-pick-btn.active{background:rgba(52,152,219,.25);border-color:#3498db;color:#3498db;font-weight:700}
 .bb-pick-btn.draw{flex:0 0 46px;font-size:.75rem}
 .baseball-bet-confirm{display:flex;gap:.4rem;align-items:center;animation:tabFadeIn .2s ease}
+
+/* ══════════════════════════════════════════════
+   ++ / +++ 칩 빛남 애니메이션
+   ══════════════════════════════════════════════ */
+@keyframes chipGlow2 {
+  0%,100% { filter: drop-shadow(0 0 6px #FFD700) drop-shadow(0 0 12px #FF8800); }
+  50%      { filter: drop-shadow(0 0 14px #FFD700) drop-shadow(0 0 28px #FF4400); }
+}
+@keyframes chipGlow3 {
+  0%   { filter: drop-shadow(0 0 8px #A0C0FF) drop-shadow(0 0 20px #6080FF); }
+  33%  { filter: drop-shadow(0 0 14px #FF80FF) drop-shadow(0 0 28px #8000FF); }
+  66%  { filter: drop-shadow(0 0 10px #80FFFF) drop-shadow(0 0 22px #0080FF); }
+  100% { filter: drop-shadow(0 0 8px #A0C0FF) drop-shadow(0 0 20px #6080FF); }
+}
+/* chip-svg에 tier 클래스가 없으므로 JS로 부모에 클래스 부여 */
+.chip-stack.tier2 .chip-svg { animation: chipGlow2 1.8s ease-in-out infinite; }
+.chip-stack.tier3 .chip-svg { animation: chipGlow3 1.5s linear infinite; }
+
+/* ══════════════════════════════════════════════
+   랭킹 4위+ 배경 수정 (기존 body 배경과 안 겹치게)
+   ══════════════════════════════════════════════ */
+.ranking-table tbody tr td { color: #ccc; background: transparent; }
+.ranking-table tbody tr:hover td { background: rgba(255,255,255,.05); }
+.rank-1 td { color: #FFD700 !important; font-weight: 700; }
+.rank-2 td { color: #C0C0C0 !important; font-weight: 700; }
+.rank-3 td { color: #CD7F32 !important; font-weight: 700; }
+/* 4위 이하는 흰색 (배경색 없음) */
+.me-row td { background: rgba(241,196,15,.12) !important; color: #f1c40f !important; }
+
+/* ══════════════════════════════════════════════
+   모바일 UI: 터치 편의 개선
+   ══════════════════════════════════════════════ */
+/* 더 큰 터치 타겟 */
+@media (max-width: 640px) {
+  .nav-group-btn { padding: .35rem .7rem; font-size: .78rem; }
+  .nav-sub-btn   { padding: .32rem .7rem; font-size: .76rem; }
+  .nav-icon-btn  { width: 40px; height: 40px; font-size: .95rem; }
+
+  /* 포커 카드 - 터치 영역 확대 */
+  .card { width: 62px; height: 87px; border-radius: 6px; }
+  .card.selected { transform: translateY(-16px); }
+
+  /* 베팅존 더 높게 */
+  .betting-zone { min-height: 96px; }
+
+  /* 칩 더 크게 */
+  .chip-svg { width: 48px; height: 48px; }
+
+  /* 버튼 최소 높이 (손가락 크기) */
+  .action-button, .btn-primary, .btn-secondary {
+    min-height: 42px; padding: .5rem .85rem;
+  }
+
+  /* 슬롯 */
+  .slot-cell { height: 48px; font-size: 1.4rem; }
+  .slot-spin-btn { padding: .5rem 1rem; font-size: .95rem; }
+
+  /* 모달 전체 너비 */
+  .modal-box { max-width: calc(100vw - 24px); padding: 1.4rem 1rem; }
+  .dm-panel  { max-width: calc(100vw - 12px); }
+  .ranking-modal { max-width: calc(100vw - 16px); padding: 1rem .8rem; }
+
+  /* 토토/주사위 */
+  .toto-sub-btn { padding: .38rem .7rem; font-size: .78rem; }
+  .horse-num-btn { padding: .3rem .55rem; font-size: .74rem; }
+
+  /* 주사위 숫자 버튼 크게 */
+  .dice-num-btn { min-width: 42px; min-height: 42px; font-size: 1rem; }
+
+  /* PVP 카드 */
+  .pvp-box { padding: .8rem .65rem; }
+
+  /* 빠른 접근 플로팅 버튼 (포커 탭) */
+  .quick-deal-fab {
+    position: fixed; bottom: 90px; right: 14px;
+    width: 54px; height: 54px; border-radius: 50%;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white; border: none; font-size: 1.4rem;
+    box-shadow: 0 4px 18px rgba(46,204,113,.5);
+    cursor: pointer; z-index: 500;
+    display: flex; align-items: center; justify-content: center;
+    animation: fabPulse 2.5s ease-in-out infinite;
+    touch-action: manipulation;
+  }
+}
+
+/* ── FAB 펄스 애니메이션 ── */
+@keyframes fabPulse {
+  0%,100% { box-shadow: 0 4px 18px rgba(46,204,113,.5); }
+  50%      { box-shadow: 0 4px 28px rgba(46,204,113,.8), 0 0 0 6px rgba(46,204,113,.15); }
+}
+
+/* ══════════════════════════════════════════════
+   CSS 누락 수정 모음
+   ══════════════════════════════════════════════ */
+
+/* 주사위 */
+.dice-panel { display: flex; flex-direction: column; align-items: center; gap: .9rem; padding: 1.2rem 1rem; }
+.dice-face  { font-size: 5rem; line-height: 1; user-select: none; transition: transform .15s; }
+.dice-bet-types { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; }
+.dice-guess-row { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
+.dice-num-btn {
+  background: rgba(255,255,255,.08); border: 1.5px solid rgba(255,255,255,.18);
+  color: #ccc; min-width: 38px; min-height: 38px; border-radius: 9px;
+  cursor: pointer; font-size: .9rem; font-weight: 700;
+  transition: all .18s; display: flex; align-items: center; justify-content: center;
+}
+.dice-num-btn:hover { background: rgba(52,152,219,.2); border-color: #3498db; color: #3498db; }
+.dice-num-btn.active { background: rgba(52,152,219,.3); border-color: #3498db; color: #3498db; }
+.dice-bet-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; justify-content: center; }
+.dice-result { font-size: 1.2rem; font-weight: 700; min-height: 1.6rem; text-align: center; }
+@keyframes diceBounce { 0%,100%{transform:translateY(0)} 40%{transform:translateY(-12px)} }
+
+/* 어드민 */
+.admin-panel { padding: .6rem; }
+.admin-announce-row { display: flex; gap: .5rem; margin-bottom: .8rem; }
+.admin-user-list { display: flex; flex-direction: column; gap: .4rem; }
+.admin-user-row {
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  background: rgba(255,255,255,.05); border-radius: 9px; padding: .5rem .7rem;
+  border: 1px solid rgba(255,255,255,.08);
+}
+.admin-user-nick { flex: 1; min-width: 80px; font-size: .85rem; color: #f1c40f; font-weight: 600; display: flex; align-items: center; gap: .35rem; }
+.admin-user-chips { color: #2ecc71; font-size: .78rem; white-space: nowrap; }
+.admin-user-time  { color: #666; font-size: .7rem; white-space: nowrap; }
+.admin-user-actions { display: flex; gap: .3rem; flex-wrap: wrap; }
+.admin-btn {
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+  color: #ccc; padding: .25rem .55rem; border-radius: 7px; cursor: pointer;
+  font-size: .72rem; font-weight: 600; transition: all .18s;
+}
+.admin-btn:hover { background: rgba(255,255,255,.18); color: white; }
+.admin-btn.admin-btn-danger { color: #e74c3c; border-color: rgba(231,76,60,.35); }
+.admin-btn.admin-btn-danger:hover { background: rgba(231,76,60,.2); }
+.admin-public { padding: .6rem; }
+.announce-item { background: rgba(231,76,60,.1); border: 1px solid rgba(231,76,60,.25); border-radius: 10px; padding: .6rem .8rem; margin-bottom: .5rem; }
+.announce-content { color: white; font-size: .88rem; margin-bottom: .25rem; }
+.announce-time { color: #888; font-size: .7rem; }
+
+/* 토토 공통 */
+.toto-loading { text-align: center; color: #888; padding: 1.5rem; font-size: .9rem; }
+.toto-err     { text-align: center; color: #e74c3c; padding: 1rem; font-size: .85rem; }
+.toto-empty   { text-align: center; color: #666; padding: 1.2rem; font-size: .88rem; }
+.toto-waiting { text-align: center; color: #aaa; padding: .8rem; font-size: .88rem; animation: pulseAnim 1.5s infinite; }
+.toto-refresh-btn {
+  display: block; margin: .7rem auto 0;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.18);
+  color: #aaa; padding: .38rem .9rem; border-radius: 20px; cursor: pointer; font-size: .8rem;
+  transition: all .2s;
+}
+.toto-refresh-btn:hover { background: rgba(255,255,255,.14); color: white; }
+
+/* 경마 */
+.horse-info  { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.horse-dist  { background: rgba(241,196,15,.15); color: #f1c40f; padding: .2rem .65rem; border-radius: 12px; font-size: .78rem; font-weight: 600; }
+.horse-status { font-size: .78rem; font-weight: 700; padding: .2rem .6rem; border-radius: 10px; }
+.horse-status.betting { background: rgba(46,204,113,.2); color: #2ecc71; }
+.horse-status.running { background: rgba(231,76,60,.2); color: #e74c3c; }
+.horse-status.finished { background: rgba(100,100,100,.2); color: #888; }
+.horse-countdown { color: #f1c40f; font-size: .88rem; font-weight: 700; }
+.horse-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: .5rem; margin-bottom: .7rem; }
+.horse-card  {
+  background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.14);
+  border-radius: 11px; padding: .55rem .4rem; text-align: center;
+  cursor: pointer; transition: all .2s;
+}
+.horse-card:hover  { border-color: rgba(241,196,15,.5); background: rgba(241,196,15,.1); }
+.horse-card.selected { border-color: #f1c40f; background: rgba(241,196,15,.2); }
+.horse-num  { font-size: .72rem; color: #888; margin-bottom: .15rem; }
+.horse-name { font-size: .88rem; font-weight: 700; color: #f1c40f; }
+.horse-payout { font-size: .7rem; color: #2ecc71; margin-top: .15rem; }
+.horse-result { background: rgba(46,204,113,.15); border: 1px solid rgba(46,204,113,.35); border-radius: 10px; padding: .5rem .8rem; margin-bottom: .6rem; color: #2ecc71; font-size: .88rem; font-weight: 600; }
+.horse-bet-panel { background: rgba(0,0,0,.3); border-radius: 12px; padding: .7rem; }
+.horse-bet-type  { display: flex; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
+.horse-bet-hint  { font-size: .78rem; color: #aaa; margin-bottom: .5rem; min-height: 1.1rem; }
+.horse-bet-row   { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+/* 투자 탭 */
+.invest-card {
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 11px; padding: .65rem .8rem; margin-bottom: .5rem;
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+}
+.invest-positive { color: #2ecc71; font-weight: 700; }
+.invest-negative { color: #e74c3c; font-weight: 700; }
+
+/* stickman wrap 클릭 */
+.stickman-wrap { cursor: pointer; transition: transform .2s; }
+.stickman-wrap:hover { transform: scale(1.15); }
+
+/* title badge */
+.title-badge { font-size: .7rem; font-weight: 700; padding: .05rem .35rem; border-radius: 8px; background: rgba(241,196,15,.15); }
+
+/* chips-total */
+.chips-total-display {
+  position: fixed; top: 97px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.7); border: 1px solid rgba(241,196,15,.3);
+  border-radius: 20px; padding: .25rem .9rem;
+  color: #f1c40f; font-size: .82rem; font-weight: 700;
+  z-index: 200; white-space: nowrap; pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+/* ++ 칩 스택 CSS 클래스 (JS에서 tier 클래스 부여) */
+.chip-stack.tier2 { filter: none; }
+.chip-stack.tier3 { filter: none; }
+
+/* ══════════════════════════════════════════════════
+   빠진 CSS 전부 + 모바일 개선 + 랭킹 수정
+   ══════════════════════════════════════════════════ */
+
+/* ── 랭킹 4위+ 배경 수정 (어두운 배경과 대비) ── */
+.ranking-table tbody tr td { color: #ccc; }
+.ranking-table tbody tr:nth-child(even) td { background: rgba(255,255,255,.02); }
+.rank-1 td { color: #FFD700 !important; font-weight: 700; background: rgba(255,215,0,.06) !important; }
+.rank-2 td { color: #C0C0C0 !important; font-weight: 700; background: rgba(192,192,192,.05) !important; }
+.rank-3 td { color: #CD7F32 !important; font-weight: 700; background: rgba(205,127,50,.05) !important; }
+.me-row td { background: rgba(241,196,15,.12) !important; color: #f1c40f !important; }
+.ranking-table tr:hover td { background: rgba(255,255,255,.06) !important; }
+.ranking-empty { color: #555; padding: 1.2rem; font-size: .88rem; text-align: center; }
+
+/* ── 토토/경마 빠진 스타일 ── */
+#tabToto { background: linear-gradient(135deg, #0a0f1a, #050810); overflow-y: auto; }
+.toto-loading { color: #888; text-align: center; padding: 1.5rem; font-size: .88rem; animation: pulseAnim 1.5s infinite; }
+.toto-err { color: #e74c3c; text-align: center; padding: 1.2rem; font-size: .85rem; }
+.toto-empty { color: #555; text-align: center; padding: 1.2rem; font-size: .85rem; }
+.toto-refresh-btn { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); color: #aaa; padding: .35rem .85rem; border-radius: 8px; cursor: pointer; font-size: .78rem; transition: all .18s; align-self: flex-start; }
+.toto-refresh-btn:hover { background: rgba(255,255,255,.14); color: white; }
+.toto-waiting { color: #888; text-align: center; padding: .7rem; font-size: .85rem; }
+
+/* 경마 카드 */
+.horse-info { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.horse-dist { background: rgba(241,196,15,.15); border: 1px solid rgba(241,196,15,.35); color: #f1c40f; padding: .22rem .65rem; border-radius: 12px; font-size: .78rem; font-weight: 700; }
+.horse-status { font-size: .78rem; font-weight: 700; padding: .22rem .65rem; border-radius: 12px; }
+.horse-status.betting { background: rgba(46,204,113,.18); color: #2ecc71; border: 1px solid rgba(46,204,113,.35); }
+.horse-status.running { background: rgba(231,76,60,.18); color: #e74c3c; border: 1px solid rgba(231,76,60,.35); animation: pulseAnim 1s infinite; }
+.horse-status.finished { background: rgba(149,165,166,.15); color: #aaa; border: 1px solid rgba(149,165,166,.3); }
+.horse-countdown { color: #f1c40f; font-size: .85rem; font-weight: 700; margin-left: auto; }
+.horse-result { background: rgba(241,196,15,.12); border: 1px solid rgba(241,196,15,.3); border-radius: 10px; padding: .5rem .9rem; font-size: .88rem; color: #f1c40f; font-weight: 700; }
+.horse-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: .5rem; }
+.horse-card { background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.12); border-radius: 12px; padding: .7rem .6rem; cursor: pointer; transition: all .22s cubic-bezier(.34,1.56,.64,1); text-align: center; }
+.horse-card:hover { border-color: rgba(241,196,15,.5); background: rgba(241,196,15,.08); transform: translateY(-2px); }
+.horse-card.selected { border-color: #f1c40f; background: rgba(241,196,15,.18); transform: translateY(-3px); box-shadow: 0 6px 18px rgba(241,196,15,.25); }
+.horse-num { font-size: .7rem; color: #888; margin-bottom: .2rem; }
+.horse-name { font-size: 1rem; font-weight: 700; color: #f1c40f; margin-bottom: .3rem; }
+.horse-payout { font-size: .75rem; color: #2ecc71; font-weight: 600; }
+.horse-bet-panel { background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: .75rem; display: flex; flex-direction: column; gap: .55rem; }
+.horse-bet-type { display: flex; gap: .4rem; flex-wrap: wrap; }
+.horse-bet-hint { font-size: .78rem; color: #aaa; text-align: center; min-height: 1.2rem; }
+.horse-bet-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+/* ── 주사위 스타일 ── */
+#tabDice { background: linear-gradient(135deg, #0d0d1a, #060612); overflow-y: auto; align-items: center; justify-content: center; }
+.dice-panel { max-width: 380px; width: 92%; padding: 1.2rem; display: flex; flex-direction: column; gap: .9rem; align-items: center; }
+.dice-face { font-size: 5rem; text-align: center; min-height: 90px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 20px rgba(241,196,15,.4)); transition: all .2s; animation: none; }
+@keyframes diceBounce { 0%,100%{transform:scale(1)} 40%{transform:scale(1.3) rotate(15deg)} 70%{transform:scale(.9) rotate(-5deg)} }
+.dice-bet-types { display: flex; gap: .5rem; width: 100%; }
+.dice-bet-types button { flex: 1; }
+.dice-guess-row { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: center; width: 100%; }
+.dice-num-btn { background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.15); color: #aaa; width: 46px; height: 46px; border-radius: 50%; cursor: pointer; font-size: 1.1rem; font-weight: 700; transition: all .22s cubic-bezier(.34,1.56,.64,1); }
+.dice-num-btn:hover { border-color: rgba(241,196,15,.5); color: #f1c40f; transform: scale(1.1); }
+.dice-num-btn.active { background: rgba(241,196,15,.2); border-color: #f1c40f; color: #f1c40f; transform: scale(1.15); box-shadow: 0 0 14px rgba(241,196,15,.3); }
+.dice-bet-row { display: flex; gap: .5rem; width: 100%; }
+.dice-bet-row .slot-bet-inp { flex: 1; font-size: 1rem; padding: .6rem .8rem; }
+.dice-result { font-size: 1.1rem; font-weight: 700; text-align: center; min-height: 1.6rem; transition: all .3s; }
+
+/* ── 관리자 패널 ── */
+#tabAdmin { background: linear-gradient(135deg, #0d0a06, #070504); overflow-y: auto; }
+.admin-panel { max-width: 700px; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; gap: .8rem; }
+.admin-announce-row { display: flex; gap: .5rem; }
+.admin-user-list { display: flex; flex-direction: column; gap: .4rem; }
+.admin-user-row { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; padding: .55rem .75rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.admin-user-nick { flex: 1; min-width: 80px; display: flex; align-items: center; gap: .35rem; font-size: .88rem; color: #f1c40f; font-weight: 600; }
+.admin-user-chips { font-size: .78rem; color: #2ecc71; white-space: nowrap; }
+.admin-user-time { font-size: .68rem; color: #666; white-space: nowrap; }
+.admin-user-actions { display: flex; gap: .3rem; flex-shrink: 0; flex-wrap: wrap; }
+.admin-btn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); color: #ccc; padding: .25rem .55rem; border-radius: 6px; cursor: pointer; font-size: .72rem; transition: all .18s; }
+.admin-btn:hover { background: rgba(255,255,255,.18); color: white; }
+.admin-btn-danger { border-color: rgba(231,76,60,.4); color: #e74c3c; }
+.admin-btn-danger:hover { background: rgba(231,76,60,.2); }
+.admin-public { max-width: 700px; margin: 0 auto; padding: 1rem; }
+.announce-item { background: rgba(255,255,255,.04); border: 1px solid rgba(255,215,0,.15); border-radius: 10px; padding: .65rem .85rem; margin-bottom: .5rem; }
+.announce-content { color: #f1c40f; font-size: .9rem; margin-bottom: .3rem; }
+.announce-time { font-size: .7rem; color: #666; }
+
+/* ── 칭호 배지 ── */
+.title-badge { font-size: .75rem; font-weight: 700; padding: .1rem .4rem; border-radius: 8px; border: 1px solid currentColor; display: inline-block; }
+
+/* ── DM 인라인 패널 ── */
+.dm-panel-inline { height: 100%; display: flex; flex-direction: column; background: transparent; border: none; border-radius: 0; width: 100%; max-height: none; }
+
+/* ── 투자 탭 ── */
+#communityInvest { padding: .5rem; }
+
+/* ── chips-total 표시 ── */
+.chips-total-display { display: none; } /* 제거됨, 탭에서 보여줌 */
+
+/* ══════ 모바일 UX 개선 ══════ */
+
+/* 포커 모바일 - 카드 영역 세로 줄이기, 버튼 크게 */
+@media(max-width:640px){
+  .main-area { padding: .3rem .4rem; gap: .25rem; justify-content: flex-start; }
+  .cards-area { min-height: 110px; gap: .3rem; }
+  .card { width: 58px; height: 81px; }
+  .betting-zone { min-height: 80px; margin: .2rem .3rem; }
+  .bet-amount { font-size: 1.2rem; }
+  .player-chips-area { padding: .5rem .5rem; gap: .4rem; }
+  .chips-label { font-size: .82rem; }
+  .chip-svg { width: 44px; height: 44px; }
+  .action-button { padding: .5rem .7rem; font-size: .82rem; border-radius: 12px; }
+  /* 버튼 줄바꿈 방지 */
+  .action-buttons { gap: .3rem; }
+  /* 결과창 */
+  .result-title { font-size: 2rem; }
+  .result-amount { font-size: 1.4rem; }
+  /* 슬롯 */
+  .slot-cell { height: 40px; font-size: 1.2rem; }
+  .slot-machine { min-width: 100%; flex: 1 1 100%; }
+  /* 주사위 */
+  .dice-face { font-size: 4rem; }
+  .dice-num-btn { width: 40px; height: 40px; font-size: .95rem; }
+  /* 모달 */
+  .modal-box { padding: 1.3rem 1rem; }
+  .ranking-modal { padding: 1rem; }
+  /* 탭 배경 */
+  #tabCommunity, #tabAdmin { padding-bottom: 1rem; }
+  /* 경마 그리드 */
+  .horse-grid { grid-template-columns: repeat(3, 1fr); }
+  /* 야구 */
+  .baseball-card { padding: .6rem .7rem; }
+  /* 주사위 패널 */
+  .dice-panel { padding: .8rem; }
+  /* PVP */
+  .pvp-box { padding: 1rem; }
+}
+@media(max-width:400px){
+  .card { width: 48px; height: 67px; }
+  .chip-svg { width: 38px; height: 38px; }
+  .action-button { padding: .45rem .55rem; font-size: .76rem; }
+  .horse-grid { grid-template-columns: repeat(2, 1fr); }
+  .nav-brand { display: none; }
+}
+
+/* 모바일 스크롤바 */
+@media(max-width:768px){
+  * { scrollbar-width: thin; scrollbar-color: rgba(241,196,15,.3) transparent; }
+  *::-webkit-scrollbar { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-thumb { background: rgba(241,196,15,.3); border-radius: 2px; }
+}
+
+/* 터치 피드백 */
+@media(hover:none){
+  .btn-primary:active { transform: scale(.94); filter: brightness(.9); }
+  .btn-secondary:active { transform: scale(.94); }
+  .action-button:active:not(:disabled) { transform: scale(.93) !important; }
+  .horse-card:active { transform: scale(.95); }
+  .bb-pick-btn:active { transform: scale(.94); }
+  .chip-stack:active { transform: scale(.92); }
+  .nav-sub-btn:active { background: rgba(241,196,15,.15); }
+  .nav-group-btn:active { background: rgba(241,196,15,.18); }
+}
+
+
+/* ══════ ++ 토큰 빛남 효과 ══════ */
+.plus1 { color: #f1c40f; }
+.plus2 {
+  color: #fff;
+  text-shadow: 0 0 8px #f1c40f, 0 0 16px #f1c40f;
+  animation: shimmer1 1.5s ease-in-out infinite alternate;
+}
+.plus3 {
+  color: #fff;
+  text-shadow: 0 0 10px #a78bfa, 0 0 20px #7c3aed, 0 0 40px #5b21b6;
+  animation: shimmer2 1.2s ease-in-out infinite alternate;
+}
+.plus4 {
+  background: linear-gradient(90deg, #f43f5e, #a855f7, #3b82f6, #a855f7, #f43f5e);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbowShift 2s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(168,85,247,.8));
+}
+@keyframes shimmer1 {
+  from { text-shadow: 0 0 6px #f1c40f, 0 0 12px #f1c40f; }
+  to   { text-shadow: 0 0 14px #f1c40f, 0 0 28px #f1c40f, 0 0 50px rgba(241,196,15,.5); }
+}
+@keyframes shimmer2 {
+  from { text-shadow: 0 0 8px #a78bfa, 0 0 16px #7c3aed; filter: brightness(1); }
+  to   { text-shadow: 0 0 20px #a78bfa, 0 0 40px #7c3aed, 0 0 70px #5b21b6; filter: brightness(1.3); }
+}
+@keyframes rainbowShift {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+/* 랭킹에서 ++ 숫자 빛남 */
+.rank-val-plus1 { color: #f1c40f; font-weight: 700; }
+.rank-val-plus2 { color: #fff; text-shadow: 0 0 8px #f1c40f, 0 0 20px #f1c40f; font-weight: 700; }
+.rank-val-plus3 { color: #fff; text-shadow: 0 0 10px #a78bfa, 0 0 25px #7c3aed; font-weight: 700; }
