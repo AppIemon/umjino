@@ -13,9 +13,9 @@ async function getDb() {
   if (_db) return _db;
   if (!_client) {
     _client = new MongoClient(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000,
-      socketTimeoutMS: 8000,
+      serverSelectionTimeoutMS: 4000,
+      connectTimeoutMS: 4000,
+      socketTimeoutMS: 6000,
       maxPoolSize: 1,          // serverless: 연결 1개로 충분
       minPoolSize: 0,
       maxIdleTimeMS: 10000,    // 10초 idle이면 반환

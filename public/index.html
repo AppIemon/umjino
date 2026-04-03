@@ -270,7 +270,11 @@
 
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loading-spinner"></div>
-  <div class="loading-msg" id="loadingMsg">로그인 중...</div>
+  <div class="loading-msg" id="loadingMsg">접속 중...</div>
+  <button onclick="hideLoading();clearSession();document.getElementById('authModal').classList.add('show')"
+    style="margin-top:1.2rem;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#aaa;padding:.5rem 1.2rem;border-radius:20px;cursor:pointer;font-size:.82rem">
+    취소
+  </button>
 </div>
 
 <!-- JS 로드 순서 중요 -->
@@ -317,16 +321,15 @@ window.addEventListener('beforeunload', ()=>{
   if(loadSession()){
     showLoading('접속 중...');
     try{
-      const res=await fetchT(`${PLAYER_API}?action=load&nick=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`);
+      const res=await fetchT(`${PLAYER_API}?action=load&nick=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`,null,5000);
       if(!res.ok) throw new Error('session invalid');
       const data=await res.json();
       nickname=sessionNickname;
-      applyServerState(data);
-      if(data.taxApplied) showTaxToast();
+      try{ applyServerState(data); }catch(e){ console.error('applyServerState err',e); }
     }catch(e){
       clearSession();
       document.getElementById('authModal').classList.add('show');
-      setTimeout(()=>document.getElementById('authNick').focus(),100);
+      setTimeout(()=>document.getElementById('authNick')?.focus(),100);
       chipDist=computeGreedyDist(chips);updateChipsDisplay();updateBetDisplay();updateStatsDisplay();
     }finally{ hideLoading(); }
   }else{

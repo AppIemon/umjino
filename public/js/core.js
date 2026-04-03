@@ -21,7 +21,7 @@ const TAB_MUSIC={
 // ── Network ──────────────────────────────────
 async function fetchT(url,opts,ms){
   const ctrl=new AbortController();
-  const tid=setTimeout(()=>ctrl.abort(),ms||8000);
+  const tid=setTimeout(()=>ctrl.abort(),ms||5000);
   try{return await fetch(url,{...(opts||{}),signal:ctrl.signal})}
   finally{clearTimeout(tid)}
 }
