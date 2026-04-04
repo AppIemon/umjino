@@ -31,8 +31,14 @@ function loadSession(){
   const raw=localStorage.getItem('pkSession');if(!raw)return false;
   try{const s=JSON.parse(raw);sessionNickname=s.n;sessionToken=s.t;return!!(s.n&&s.t)}catch{return false}
 }
-function saveSession(nick,tok){sessionNickname=nick;sessionToken=tok;localStorage.setItem('pkSession',JSON.stringify({n:nick,t:tok}));nickname=nick}
-function clearSession(){sessionNickname=null;sessionToken=null;localStorage.removeItem('pkSession');nickname=null}
+function saveSession(nick,tok){
+  sessionNickname=nick;sessionToken=tok;
+  localStorage.setItem('pkSession',JSON.stringify({n:nick,t:tok}));
+  nickname=nick;
+  const el=document.getElementById('navNickName');
+  if(el) el.textContent=nick.length>8?nick.slice(0,8)+'…':nick;
+}
+function clearSession(){sessionNickname=null;sessionToken=null;localStorage.removeItem('pkSession');nickname=null;const el=document.getElementById('navNickName');if(el)el.textContent='-';}
 
 // ── Persist state ────────────────────────────
 let _saveTimer=null;
@@ -567,4 +573,90 @@ function doExchange(chipIdx) {
   updateChipsDisplay(); updateSlotChipsDisplay();
   if (typeof updateAllChipInputs === 'function') updateAllChipInputs();
   renderExchangeChips();
+}
+
+// ── 계정 메뉴 (닉네임 변경 / 로그아웃) ──────
+function showAccountMenu() {
+  const existing = document.getElementById('accountMenu');
+  if (existing) { existing.remove(); return; }
+  if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
+
+  const btn = document.getElementById('navNickBtn');
+  const rect = btn.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.id = 'accountMenu';
+  menu.style.cssText = `position:fixed;top:${rect.bottom+4}px;right:${window.innerWidth-rect.right}px;
+    background:#1a2a1a;border:1.5px solid rgba(241,196,15,.35);border-radius:12px;
+    padding:.4rem 0;z-index:8000;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.6);
+    animation:modalSlideUp .2s ease`;
+
+  menu.innerHTML = `
+<div style="padding:.4rem .9rem .2rem;color:#888;font-size:.72rem">@${escHtml(sessionNickname)}</div>
+<div class="acct-menu-item" onclick="closeAccountMenu();showRenameModal()">✏️ 닉네임 변경</div>
+<div class="acct-menu-sep"></div>
+<div class="acct-menu-item danger" onclick="closeAccountMenu();doLogout()">🚪 로그아웃</div>`;
+
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', closeAccountMenu, { once: true }), 10);
+}
+
+function closeAccountMenu() {
+  document.getElementById('accountMenu')?.remove();
+}
+
+function showRenameModal() {
+  const overlay = document.createElement('div');
+  overlay.id = 'renameOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:7500;backdrop-filter:blur(4px)';
+  overlay.innerHTML = `
+<div style="background:linear-gradient(145deg,#1e3d2a,#0d2018);border:2px solid rgba(241,196,15,.45);
+  border-radius:18px;padding:1.6rem;width:min(340px,92vw);color:white;animation:modalSlideUp .25s ease">
+  <h3 style="color:#f1c40f;margin-bottom:1rem;font-size:1.1rem">✏️ 닉네임 변경</h3>
+  <p style="color:#888;font-size:.8rem;margin-bottom:.8rem">현재: <b style="color:#aaa">${escHtml(sessionNickname)}</b></p>
+  <input id="renameInput" class="modal-input" type="text" placeholder="새 닉네임 (2~24자)" maxlength="24" style="margin-bottom:.6rem">
+  <div id="renameError" style="color:#e74c3c;font-size:.8rem;min-height:1.2rem;margin-bottom:.6rem"></div>
+  <div style="display:flex;gap:.6rem">
+    <button class="btn-primary" onclick="doRename()" style="flex:1">변경</button>
+    <button class="btn-secondary" onclick="document.getElementById('renameOverlay').remove()">취소</button>
+  </div>
+</div>`;
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('renameInput')?.focus(), 50);
+  document.getElementById('renameInput').onkeydown = e => { if (e.key === 'Enter') doRename(); };
+}
+
+async function doRename() {
+  const input = document.getElementById('renameInput');
+  const errEl = document.getElementById('renameError');
+  const nn = input?.value?.trim();
+  if (!nn || nn.length < 2) { errEl.textContent = '2자 이상 입력'; return; }
+  errEl.textContent = '';
+  input.disabled = true;
+  try {
+    const res = await fetchT('/api/rename', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: sessionNickname, token: sessionToken, newNickname: nn })
+    }, 8000);
+    const d = await res.json();
+    if (!res.ok) { errEl.textContent = d.error || '오류'; input.disabled = false; return; }
+    saveSession(d.newNickname, d.newToken);
+    nickname = d.newNickname;
+    document.getElementById('renameOverlay')?.remove();
+    // 화면에 표시된 닉네임 갱신
+    updateChipsDisplay(); updateBetDisplay();
+  } catch(e) { errEl.textContent = '서버 오류'; input.disabled = false; }
+}
+
+function doLogout() {
+  if (!confirm('로그아웃 하시겠습니까?')) return;
+  clearSession();
+  // 게임 상태 초기화
+  chips = 10n; currentBet = 0n; betTokens = []; gamePhase = 'betting'; playerHand = [];
+  chipDist = computeGreedyDist(chips);
+  localStorage.removeItem('pkBet'); localStorage.removeItem('pkBetTokens');
+  localStorage.removeItem('pkPhase'); localStorage.removeItem('pkHand');
+  updateChipsDisplay(); updateBetDisplay(); updateStatsDisplay();
+  document.getElementById('authModal').classList.add('show');
+  setTimeout(() => document.getElementById('authNick')?.focus(), 100);
 }

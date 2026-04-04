@@ -1014,3 +1014,17 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .cip-zone-label{font-size:.6rem;color:#2ecc71;font-weight:700}
 .cip-amt{font-size:.95rem;color:#f1c40f;font-weight:700}
 .cip-spin-btn{white-space:nowrap}
+
+/* ── 닉네임 버튼 + 계정 메뉴 ── */
+.nav-nick-btn{
+  background:rgba(241,196,15,.1);border:1.5px solid rgba(241,196,15,.3);
+  color:#f1c40f;padding:.25rem .65rem;border-radius:20px;cursor:pointer;
+  font-size:.78rem;font-weight:700;max-width:100px;overflow:hidden;
+  white-space:nowrap;text-overflow:ellipsis;transition:all .2s;
+}
+.nav-nick-btn:hover{background:rgba(241,196,15,.22);border-color:#f1c40f;transform:scale(1.05)}
+.acct-menu-item{padding:.45rem .9rem;cursor:pointer;font-size:.85rem;color:#ddd;transition:background .12s}
+.acct-menu-item:hover{background:rgba(255,255,255,.08)}
+.acct-menu-item.danger{color:#e74c3c}
+.acct-menu-item.danger:hover{background:rgba(231,76,60,.12)}
+.acct-menu-sep{height:1px;background:rgba(255,255,255,.08);margin:.2rem 0}

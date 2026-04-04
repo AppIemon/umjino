@@ -487,8 +487,8 @@ app.post('/api/player', async (req, res) => {
 
     if (action === 'register') {
       const { nickname, password } = body;
-      if (!nickname || nickname.length < 2 || nickname.length > 12)
-        return res.status(400).json({ error: '닉네임은 2~12자' });
+      if (!nickname || nickname.length < 2 || nickname.length > 24)
+        return res.status(400).json({ error: '닉네임은 2~24자' });
       if (!password || password.length < 4)
         return res.status(400).json({ error: '비밀번호 4자 이상' });
       if (await col.findOne({ nickname }))
@@ -1746,6 +1746,28 @@ app.post('/api/admin', async (req, res) => {
 });
 
 // ── 칭호 변경 (본인만 색상 변경) ──────────────────────────────────
+// 닉네임 변경
+app.post('/api/rename', async (req, res) => {
+  const { nickname, token, newNickname } = req.body || {};
+  try {
+    const db = await getDb();
+    const col = db.collection('players');
+    const p = await col.findOne({ nickname, token });
+    if (!p) return res.status(401).json({ error: '인증 실패' });
+    const nn = (newNickname || '').trim();
+    if (!nn || nn.length < 2 || nn.length > 24)
+      return res.status(400).json({ error: '닉네임은 2~24자' });
+    if (nn === nickname) return res.status(400).json({ error: '현재 닉네임과 동일' });
+    const exists = await col.findOne({ nickname: nn });
+    if (exists) return res.status(400).json({ error: '이미 사용 중인 닉네임' });
+    // 새 토큰 발급 (닉네임 변경 시 세션 갱신)
+    const crypto = require('crypto');
+    const newToken = crypto.randomBytes(32).toString('hex');
+    await col.updateOne({ nickname }, { $set: { nickname: nn, token: newToken } });
+    res.json({ ok: true, newNickname: nn, newToken });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/title', async (req, res) => {
   const { nickname, token, titleColor } = req.body || {};
   try {

@@ -18,6 +18,9 @@
       <button class="nav-group-btn" data-group="other" onclick="switchTabGroup('other')">⚙ 기타</button>
     </div>
     <div class="nav-actions">
+      <button class="nav-nick-btn" id="navNickBtn" onclick="showAccountMenu()" title="계정 설정">
+        <span id="navNickName">-</span>
+      </button>
       <button class="nav-icon-btn" onclick="showDM()" style="position:relative" title="DM">
         💬<span id="dmBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e74c3c;color:white;border-radius:50%;width:16px;height:16px;font-size:.58rem;align-items:center;justify-content:center;border:1px solid #0a2818"></span>
       </button>
@@ -277,7 +280,7 @@
 <div class="modal-overlay" id="authModal">
   <div class="modal-box">
     <h2>🎰 엄지노</h2><p>닉네임과 비밀번호를 입력하세요</p>
-    <input class="modal-input" id="authNick" type="text" placeholder="닉네임 (최대 12자)" maxlength="12" style="margin-bottom:.55rem" autocomplete="username">
+    <input class="modal-input" id="authNick" type="text" placeholder="닉네임 (최대 24자)" maxlength="24" style="margin-bottom:.55rem" autocomplete="username">
     <input class="modal-input" id="authPass" type="password" placeholder="비밀번호 (4자 이상)" autocomplete="current-password" onkeydown="if(event.key==='Enter')authSubmit('login')">
     <div class="modal-error" id="authError"></div>
     <div class="modal-buttons">
