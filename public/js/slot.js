@@ -33,6 +33,7 @@ function slotAddCost(currentCount) {
 let slotMachines = [], _slotId = 0;
 let slotBet = 0n;       // 현재 베팅 금액
 let slotBetDist = {};   // 베팅에 사용된 칩 분포 (환불용)
+let slotBetDeducted = false; // 이번 스핀에서 이미 차감했는지
 
 function createSlotMachineData() {
   return { id: _slotId++, busy: false, grid: Array(15).fill('🍒') };
@@ -70,6 +71,7 @@ function slotThrowChip(chip, e) {
   chips -= chip.value; slotBet += chip.value;
   slotBetDist[key] = (slotBetDist[key] || 0n) + 1n;
   sfxChip();
+  slotBetDeducted = true; // throw 시 chips 차감 완료
 
   // 토큰 던지기 모션 → 베팅존
   const bz = document.getElementById('slotBetZone');
@@ -96,7 +98,7 @@ function slotThrowChip(chip, e) {
 }
 
 function slotClearBet() {
-  chips += slotBet; slotBet = 0n; slotBetDist = {};
+  chips += slotBet; slotBet = 0n; slotBetDist = {}; slotBetDeducted = false;
   chipDist = computeGreedyDist(chips);
   const bz = document.getElementById('slotBetZone');
   if (bz) bz.querySelectorAll('.bet-token').forEach(t => t.remove());
@@ -137,7 +139,7 @@ function renderSlotMachines() {
 <div class="slot-bet-row">
   <div class="slot-chip-scroll"><div class="chips-container" id="slotChipStacks"></div></div>
   <div class="slot-bet-zone" id="slotBetZone">
-    <div class="slot-bet-label">베팅</div>
+    <div class="slot-bet-label">베팅 (자동유지)</div>
     <div class="slot-bet-amount" id="slotBetAmt">0</div>
   </div>
   <div style="display:flex;flex-direction:column;gap:.35rem;flex-shrink:0">
@@ -207,23 +209,28 @@ function evalSlotGrid(grid) {
 async function spinAll() {
   if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
   if (slotBet <= 0n) { alert('베팅 먼저!'); return; }
-  const betAmt = slotBet;
-  const totalBet = betAmt * BigInt(slotMachines.length);
-
-  // slotBet은 이미 차감됐으므로, 추가 슬롯 수만큼 더 차감
-  const extraBet = betAmt * BigInt(slotMachines.length - 1);
-  if (extraBet > chips) { alert('칩 부족! 슬롯 ' + slotMachines.length + '대 × ' + formatBig(betAmt) + '칩'); return; }
 
   const busy = slotMachines.some(m => m.busy);
   if (busy) return;
 
-  // 추가 슬롯 차감 + 베팅존 초기화
-  if (extraBet > 0n) {
-    chips -= extraBet; chipDist = computeGreedyDist(chips);
+  // 2번째 스핀부터는 chips에서 다시 차감 (첫 스핀은 throw 시 이미 차감됨)
+  if (!slotBetDeducted) {
+    if (slotBet > chips) { alert('칩 부족'); return; }
+    chips -= slotBet; chipDist = computeGreedyDist(chips);
   }
-  slotBet = 0n; slotBetDist = {};
-  document.getElementById('slotBetZone')?.querySelectorAll('.bet-token').forEach(t => t.remove());
-  updateChipsDisplay(); updateSlotBetDisplay();
+  slotBetDeducted = false; // 다음 스핀을 위해 리셋
+
+  // 슬롯 수로 나눠서 대당 배분
+  const n = BigInt(slotMachines.length);
+  const betAmt = slotBet / n;
+  if (betAmt <= 0n) { alert('슬롯 수에 비해 베팅액이 너무 작습니다'); return; }
+  // 나머지 환불 (나눗셈 나머지)
+  const actualTotal = betAmt * n;
+  if (slotBet > actualTotal) {
+    chips += (slotBet - actualTotal); chipDist = computeGreedyDist(chips);
+  }
+  // 베팅존/slotBet 유지 — 스핀 버튼 누르면 자동 재스핀 가능
+  updateChipsDisplay();
 
   // 토큰 던지기 모션 (각 슬롯으로)
   slotMachines.forEach((m, mi) => {
@@ -317,7 +324,10 @@ async function spinAll() {
     if(typeof saveRecentPlay==='function')saveRecentPlay({type:'🎰 슬롯머신',desc:slotMachines.length+'대 × '+formatBig(betAmt)+'칩 베팅 → 꽝',result:'lose'});
   }
 
-  updateChipsDisplay(); updateSlotChipsDisplay(); updateRlChipRow(); saveState();
+  updateChipsDisplay(); updateSlotChipsDisplay(); updateRlChipRow();
+  // 베팅 유지 — chips는 이미 slotBet 차감 상태이므로 다음 스핀 그대로 사용 가능
+  // 다만 winnings가 들어왔으므로 칩 분포 재계산 (slotBet은 그대로)
+  saveState();
   document.getElementById('slotSpinAllBtn').disabled = false;
 }
 
