@@ -888,3 +888,24 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .rank-val-plus1 { color: #f1c40f; font-weight: 700; }
 .rank-val-plus2 { color: #fff; text-shadow: 0 0 8px #f1c40f, 0 0 20px #f1c40f; font-weight: 700; }
 .rank-val-plus3 { color: #fff; text-shadow: 0 0 10px #a78bfa, 0 0 25px #7c3aed; font-weight: 700; }
+
+/* ── KBO 라이브 상태 ── */
+.bb-status-chip{display:inline-block;padding:.18rem .55rem;border-radius:12px;font-size:.7rem;font-weight:700}
+.bb-status-chip.finished{background:rgba(255,255,255,.08);color:#666}
+.bb-status-chip.live{background:rgba(231,76,60,.2);color:#e74c3c;animation:livePulse 1.4s infinite}
+.bb-status-chip.open{background:rgba(46,204,113,.15);color:#2ecc71}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.6}}
+.bb-score.live{color:#e74c3c;font-weight:900}
+.baseball-card.live-game{border-color:rgba(231,76,60,.4)}
+.baseball-card.live-game::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#e74c3c,transparent);animation:scanline 2s linear infinite}
+.baseball-card{position:relative;overflow:hidden}
+
+/* ── 경마 상태 ── */
+.horse-status{display:inline-block;padding:.18rem .6rem;border-radius:12px;font-size:.75rem;font-weight:700}
+.horse-status.betting{background:rgba(46,204,113,.2);color:#2ecc71}
+.horse-status.running{background:rgba(241,196,15,.2);color:#f1c40f;animation:livePulse 1s infinite}
+.horse-status.finished{background:rgba(255,255,255,.08);color:#666}
+.horse-last-result{font-size:.75rem;color:#888;padding:.3rem .5rem;background:rgba(255,255,255,.04);border-radius:8px;margin-bottom:.4rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.horse-medal{background:rgba(241,196,15,.12);padding:.1rem .4rem;border-radius:8px;color:#f1c40f;font-size:.72rem}
+.horse-card.result-horse{border-color:rgba(46,204,113,.6);background:rgba(46,204,113,.1)}
+@keyframes scanline{from{transform:translateX(-100%)}to{transform:translateX(100%)}}

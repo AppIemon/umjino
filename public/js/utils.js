@@ -277,15 +277,15 @@ function getHandRank(hand){
   const cnts={};vals.forEach(v=>cnts[v]=(cnts[v]||0)+1);
   const cv=Object.values(cnts).sort((a,b)=>b-a);
   const p=(name,n,d)=>({name,pnum:n,pden:d||1,payoutF:n/(d||1)});
-  if(isFlush&&isStraight&&vals[0]===14&&vals[1]===13)return p('로얄 스트레이트 플러시',1000);
-  if(isFlush&&isStraight)return p('스트레이트 플러시',250);
-  if(cv[0]===4)return p('포카드',50);
-  if(cv[0]===3&&cv[1]===2)return p('풀하우스',25);
-  if(isFlush)return p('플러시',15);
-  if(isStraight)return p('스트레이트',10);
-  if(cv[0]===3)return p('트리플',5);
-  if(cv[0]===2&&cv[1]===2)return p('투페어',3);
-  if(cv[0]===2)return p('원페어',3,2);
+  if(isFlush&&isStraight&&vals[0]===14&&vals[1]===13)return p('로얄 스트레이트 플러시',1200);
+  if(isFlush&&isStraight)return p('스트레이트 플러시',300);
+  if(cv[0]===4)return p('포카드',60);
+  if(cv[0]===3&&cv[1]===2)return p('풀하우스',30);
+  if(isFlush)return p('플러시',18);
+  if(isStraight)return p('스트레이트',12);
+  if(cv[0]===3)return p('트리플',6);
+  if(cv[0]===2&&cv[1]===2)return p('투페어',4);
+  if(cv[0]===2)return p('원페어',2);
   return p('노페어',0);
 }
 
