@@ -247,7 +247,7 @@ function bbSelectPick(gameId, pick, btn) {
 async function placeBaseballBet(gameId) {
   if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
   const pick = _bbPicks[gameId];
-  if (!pick) { alert('팀을 선택하세요'); return; }
+  if (!pick) { alert('먼저 승리팀을 선택하세요'); return; }
   const amtStr = document.getElementById('bbAmt_'+gameId)?.value?.trim();
   let amt; try { amt = BigInt(amtStr); } catch(e) { alert('금액 입력'); return; }
   if (amt <= 0n) { alert('0보다 커야 함'); return; }

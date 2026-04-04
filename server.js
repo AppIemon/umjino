@@ -1406,160 +1406,112 @@ app.post('/api/horse', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // KBO BASEBALL  /api/baseball
 // ═══════════════════════════════════════════════════════════
+// KBO BASEBALL  /api/baseball
+// ═══════════════════════════════════════════════════════════
 const KBO_TEAMS = ['KIA','삼성','LG','두산','KT','SSG','롯데','한화','NC','키움'];
 
-// 실제 KBO 라이브스코어 (여러 소스 시도)
+// KBO 공식 API: https://www.koreabaseball.com/ws/Main.asmx/GetKboGameList
+// GAME_STATE_SC: 1=예정, 2=진행중, 3=종료  |  GAME_RESULT_CK: 1=결과확정
 async function fetchKboLive() {
-  const today = new Date();
-  const kst = new Date(today.getTime() + 9*3600000);
-  const yyyymmdd = kst.toISOString().slice(0,10).replace(/-/g,'');
-  const yyyy = kst.getFullYear();
-
-  // 1) 스포츠365 라이브 API (JSON)
+  const kst = new Date(Date.now() + 9 * 3600000);
+  const yyyymmdd = kst.toISOString().slice(0, 10).replace(/-/g, '');
   try {
-    const r = await fetch(`https://sports.news.naver.com/kbaseball/schedule/index.nhn?year=${yyyy}&month=${yyyymmdd.slice(4,6)}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15' },
-      signal: AbortSignal.timeout(5000)
-    });
-    if (r.ok) {
-      const html = await r.text();
-      const games = [];
-      // 당일 경기 파싱
-      const dayPattern = new RegExp(`data-date="${yyyymmdd.slice(0,4)}-${yyyymmdd.slice(4,6)}-${yyyymmdd.slice(6,8)}"[\s\S]*?(?=data-date=|$)`, 'gi');
-      const dayBlock = html.match(dayPattern)?.[0] || '';
-      if (dayBlock) {
-        const gamePattern = /<td class="[^"]*team[^"]*home[^"]*"[\s\S]*?<span[^>]*>([^<]+)<\/span>[\s\S]*?<td class="[^"]*team[^"]*away[^"]*"[\s\S]*?<span[^>]*>([^<]+)<\/span>/gi;
-        const scorePattern = /<em class="[^"]*score[^"]*"[^>]*>(\d+)<\/em>[\s\S]*?<em class="[^"]*score[^"]*"[^>]*>(\d+)<\/em>/i;
-        for (const m of [...dayBlock.matchAll(gamePattern)]) {
-          const home = m[1].trim(), away = m[2].trim();
-          if (home && away && KBO_TEAMS.some(t => home.includes(t) || t.includes(home))) {
-            const sm = scorePattern.exec(m[0]);
-            games.push({ home, away, hscore: sm ? parseInt(sm[1]) : null, ascore: sm ? parseInt(sm[2]) : null,
-              status: sm ? 'in_progress' : 'scheduled', id: `${home}vs${away}_${yyyymmdd}` });
-          }
-        }
-        if (games.length) return games;
-      }
-    }
-  } catch(e) {}
-
-  // 2) KBO 공식 스케줄 API
-  try {
-    const url = `https://www.koreabaseball.com/ws/Schedule.asmx/GetSchedule?leId=1&srId=0&seasonId=${yyyy}&gameDate=${yyyymmdd}`;
+    const url = `https://www.koreabaseball.com/ws/Main.asmx/GetKboGameList?date=${yyyymmdd}&leId=1&srId=0`;
     const r = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.koreabaseball.com/' },
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(6000)
     });
-    if (r.ok) {
-      const text = await r.text();
-      const games = [];
-      try {
-        const parsed = JSON.parse(text.replace(/^\s*\/\*.*?\*\/\s*/s,''));
-        const list = parsed?.rows || parsed?.data || (Array.isArray(parsed)?parsed:[]);
-        for (const g of list) {
-          const home = g.homeTeamName || g.HOME_NM || '';
-          const away = g.awayTeamName || g.AWAY_NM || '';
-          if (!home || !away) continue;
-          const statusStr = (g.status || g.GAME_SC_NM || '').trim();
-          const isFinished = statusStr.includes('종료');
-          const isLive = /^\d+회/.test(statusStr) || statusStr.includes('진행');
-          const status = isFinished ? 'finished' : isLive ? 'in_progress' : 'scheduled';
-          const hscore = g.homeScore != null ? parseInt(g.homeScore) : (g.HOME_SCORE != null ? parseInt(g.HOME_SCORE) : null);
-          const ascore = g.awayScore != null ? parseInt(g.awayScore) : (g.AWAY_SCORE != null ? parseInt(g.AWAY_SCORE) : null);
-          games.push({ home, away, hscore, ascore, status, statusLabel: statusStr,
-            id: `${home}vs${away}_${yyyymmdd}` });
-        }
-        if (games.length) return games;
-      } catch(e) {}
-    }
-  } catch(e) {}
-
-  // 3) 랜덤 대진 폴백 (월요일/시즌오프)
-  const dayOfWeek = kst.getDay();
-  if (dayOfWeek === 1) return [];
-  const shuffled = [...KBO_TEAMS].sort(() => Math.random() - 0.5);
-  return Array.from({ length: 5 }, (_, i) => ({
-    home: shuffled[i*2], away: shuffled[i*2+1],
-    hscore: null, ascore: null, status: 'scheduled',
-    id: `${shuffled[i*2]}vs${shuffled[i*2+1]}_${yyyymmdd}`
-  }));
-}
-
-
-// baseball 정산 헬퍼 (중복 실행 방지)
-async function payoutBaseball(db, col, gameId, date, result) {
-  const games = db.collection('baseball_games');
-  const game = await games.findOne({ id: gameId, date, paid: { $ne: true } });
-  if (!game || game.status !== 'finished') return;
-  await games.updateOne({ id: gameId, date }, { $set: { paid: true } });
-  const winners = (game.bets || []).filter(b => b.pick === result);
-  const losers  = (game.bets || []).filter(b => b.pick !== result);
-  const loserPool = losers.reduce((s,b) => s + BigInt(b.amount), 0n);
-  const winnerTotal = winners.reduce((s,b) => s + BigInt(b.amount), 0n);
-  for (const bet of winners) {
-    const share = winnerTotal > 0n ? BigInt(bet.amount) * loserPool / winnerTotal : 0n;
-    const payout = BigInt(bet.amount) + share;
-    const bp = await col.findOne({ nickname: bet.nickname });
-    if (bp) await col.updateOne({ nickname: bet.nickname }, { $set: { chips: (BigInt(bp.chips) + payout).toString() } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const json = await r.json();
+    const games = json.game || [];
+    return games
+      .filter(g => g.CANCEL_SC_ID === '0') // 정상경기만
+      .map(g => {
+        const sc = parseInt(g.GAME_STATE_SC);
+        const status = sc >= 3 || g.GAME_RESULT_CK == 1 ? 'finished'
+                     : sc === 2 ? 'in_progress'
+                     : 'scheduled';
+        const away = g.AWAY_NM, home = g.HOME_NM;
+        const ascore = parseInt(g.T_SCORE_CN) || 0;
+        const hscore = parseInt(g.B_SCORE_CN) || 0;
+        const inning = g.GAME_INN_NO ? `${g.GAME_INN_NO}회 ${g.GAME_TB_SC_NM||''}` : null;
+        return {
+          id: `${away}vs${home}_${yyyymmdd}`,
+          away, home, ascore, hscore, status,
+          statusLabel: inning || (status==='scheduled' ? g.G_TM : status==='finished' ? '종료' : '진행중'),
+          result: status === 'finished'
+            ? (hscore > ascore ? 'home' : hscore < ascore ? 'away' : 'draw')
+            : null
+        };
+      });
+  } catch(e) {
+    console.error('fetchKboLive err:', e.message);
+    return []; // 실패 시 빈 배열 (mock 없음)
   }
 }
 
 app.get('/api/baseball', async (req, res) => {
   try {
     const db = await getDb();
-    const kst = new Date(Date.now() + 9*3600000);
+    const kst = new Date(Date.now() + 9 * 3600000);
     const today = kst.toISOString().slice(0, 10);
     const col = db.collection('baseball_games');
+    const { ObjectId } = require('mongodb');
 
-    // 항상 실시간 fetch 후 DB 업데이트
+    // 실시간 KBO 데이터 fetch
     const fetched = await fetchKboLive();
+
     for (const g of fetched) {
-      const dbStatus = g.status === 'finished' ? 'finished'
-                     : g.status === 'in_progress' ? 'in_progress'
-                     : 'open'; // scheduled → open (베팅 가능)
-      const result = g.status === 'finished' && g.hscore != null && g.ascore != null
-        ? (g.hscore > g.ascore ? 'home' : g.hscore < g.ascore ? 'away' : 'draw')
-        : null;
-      await col.updateOne(
-        { id: g.id, date: today },
-        {
-          $set: { hscore: g.hscore ?? null, ascore: g.ascore ?? null, statusLabel: g.statusLabel || '', status: dbStatus },
-          $setOnInsert: { ...g, date: today, bets: [], result: null }
-        },
-        { upsert: true }
-      );
-      // 종료된 경기 정산
-      if (result) {
-        const existing = await col.findOne({ id: g.id, date: today });
-        if (existing && existing.status !== 'finished') {
-          await col.updateOne({ id: g.id, date: today }, { $set: { status: 'finished', result } });
-          // 정산
-          const winners = (existing.bets || []).filter(b => b.pick === result);
-          const losers  = (existing.bets || []).filter(b => b.pick !== result);
-          const loserPool = losers.reduce((s,b)=>s+BigInt(b.amount),0n);
-          const winnerTotal = winners.reduce((s,b)=>s+BigInt(b.amount),0n);
+      const existing = await col.findOne({ id: g.id, date: today });
+      if (!existing) {
+        // 신규 경기 insert
+        await col.insertOne({
+          id: g.id, date: today,
+          home: g.home, away: g.away,
+          hscore: g.hscore, ascore: g.ascore,
+          status: g.status, result: g.result,
+          statusLabel: g.statusLabel,
+          bets: []
+        });
+      } else {
+        // 점수/상태 업데이트
+        const upd = { hscore: g.hscore, ascore: g.ascore, status: g.status, statusLabel: g.statusLabel };
+        if (g.result) upd.result = g.result;
+        await col.updateOne({ id: g.id, date: today }, { $set: upd });
+
+        // 새로 종료된 경기 정산
+        if (g.status === 'finished' && existing.status !== 'finished' && g.result) {
           const players = db.collection('players');
+          const winners = (existing.bets || []).filter(b => b.pick === g.result);
+          const losers  = (existing.bets || []).filter(b => b.pick !== g.result);
+          const loserPool = losers.reduce((s,b) => s + BigInt(b.amount), 0n);
+          const winnerTotal = winners.reduce((s,b) => s + BigInt(b.amount), 0n);
           for (const bet of winners) {
-            const share = winnerTotal > 0n ? BigInt(bet.amount)*loserPool/winnerTotal : 0n;
+            const share = winnerTotal > 0n ? BigInt(bet.amount) * loserPool / winnerTotal : 0n;
             const payout = BigInt(bet.amount) + share;
             const bp = await players.findOne({ nickname: bet.nickname });
-            if (bp) await players.updateOne({ nickname: bet.nickname },
-              { $set: { chips: (BigInt(bp.chips)+payout).toString() } });
+            if (bp) await players.updateOne(
+              { nickname: bet.nickname },
+              { $set: { chips: (BigInt(bp.chips) + payout).toString() } }
+            );
           }
         }
       }
     }
 
-    let games = await col.find({ date: today }).sort({ _id: 1 }).toArray();
-    // 경기 없으면 빈 배열
+    // DB에서 오늘 경기 반환
+    const games = await col.find({ date: today }).sort({ _id: 1 }).toArray();
     res.json(games.map(g => ({
       id: g._id.toString(), home: g.home, away: g.away,
       status: g.status, result: g.result,
-      hscore: g.hscore ?? null, ascore: g.ascore ?? null,
+      hscore: g.hscore ?? 0, ascore: g.ascore ?? 0,
       statusLabel: g.statusLabel || '',
-      betCount: (g.bets || []).length,
+      betCount: (g.bets || []).length
     })));
-  } catch(e) { console.error('baseball GET:', e); res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('baseball GET:', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/baseball', async (req, res) => {

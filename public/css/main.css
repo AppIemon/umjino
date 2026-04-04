@@ -909,3 +909,12 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .horse-medal{background:rgba(241,196,15,.12);padding:.1rem .4rem;border-radius:8px;color:#f1c40f;font-size:.72rem}
 .horse-card.result-horse{border-color:rgba(46,204,113,.6);background:rgba(46,204,113,.1)}
 @keyframes scanline{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* ── 야구 LIVE 배지 ── */
+.bb-badge{font-size:.65rem;padding:.15rem .45rem;border-radius:10px;font-weight:700;display:inline-block}
+.bb-badge.live{background:#e74c3c;color:white;animation:pulse .8s infinite}
+.bb-badge.done{background:rgba(255,255,255,.1);color:#666}
+.bb-badge.scheduled{background:rgba(52,152,219,.2);color:#3498db}
+.bb-score.live{color:#e74c3c;animation:pulse .8s infinite}
+.baseball-card.live{border-color:rgba(231,76,60,.5);box-shadow:0 0 12px rgba(231,76,60,.2)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
