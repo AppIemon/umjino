@@ -82,11 +82,12 @@ function switchTabGroup(group) {
   } else {
     subRow.style.display = 'none';
     document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
-    const tabId = group==='community' ? 'tabCommunity' : 'tabAdmin';
+    const tabId = group==='community' ? 'tabCommunity' : group==='admin' ? 'tabAdmin' : 'tabOther';
     document.getElementById(tabId)?.classList.add('active');
     setTimeout(() => {
       if(group==='community') loadCommunityTab();
       if(group==='admin') renderAdminTab();
+      if(group==='other') renderOtherTab();
     }, 30);
   }
 }
@@ -483,3 +484,87 @@ async function showRanking(){
   }catch(e){document.getElementById('rankingContent').innerHTML='<div class="ranking-empty">불러올 수 없음</div>'}
 }
 function closeRanking(){document.getElementById('rankingModal').classList.remove('show')}
+
+// ── 기타 탭 ──────────────────────────────────
+let sfxEnabled = true;
+let sfxVol = 0.7;
+let bgmVol = 0.5;
+
+function renderOtherTab() {
+  // 볼륨 슬라이더 현재값 반영
+  const bgmSlider = document.getElementById('bgmVolume');
+  const sfxSlider = document.getElementById('sfxVolume');
+  if (bgmSlider) { bgmSlider.value = Math.round(bgmVol * 100); document.getElementById('bgmVolVal').textContent = bgmSlider.value + '%'; }
+  if (sfxSlider) { sfxSlider.value = Math.round(sfxVol * 100); document.getElementById('sfxVolVal').textContent = sfxSlider.value + '%'; }
+  const sfxBtn = document.getElementById('sfxToggle');
+  if (sfxBtn) { sfxBtn.textContent = sfxEnabled ? 'ON' : 'OFF'; sfxBtn.classList.toggle('active', sfxEnabled); }
+  renderExchangeChips();
+}
+
+function setBgmVolume(v) {
+  bgmVol = v / 100;
+  document.querySelectorAll('audio').forEach(a => { if (!a.paused) a.volume = bgmVol; });
+  document.getElementById('bgmVolVal').textContent = v + '%';
+  localStorage.setItem('bgmVol', v);
+}
+function toggleSfx(btn) {
+  sfxEnabled = !sfxEnabled;
+  btn.textContent = sfxEnabled ? 'ON' : 'OFF';
+  btn.classList.toggle('active', sfxEnabled);
+  localStorage.setItem('sfxEnabled', sfxEnabled ? '1' : '0');
+}
+function setSfxVolume(v) {
+  sfxVol = v / 100;
+  document.getElementById('sfxVolVal').textContent = v + '%';
+  localStorage.setItem('sfxVol', v);
+}
+
+// 기존 sfxChip 등에서 sfxEnabled 체크 — utils.js의 _tone을 래핑
+const _origTone = window._tone || (() => {});
+function sfxPlay(fn) { if (sfxEnabled) fn(); }
+
+// 환전소 렌더
+function renderExchangeChips() {
+  const el = document.getElementById('exchangeChips');
+  if (!el) return;
+  el.innerHTML = '';
+  const have = getDisplayChips();
+  if (!have.length) { el.innerHTML = '<div class="toto-empty">보유 칩 없음</div>'; return; }
+  have.forEach(({ chip, cnt }) => {
+    if (chip.idx === 0) return; // 1짜리는 쪼갤 수 없음
+    const lower = chipTypes[chip.idx - 1];
+    const wrap = document.createElement('div');
+    wrap.className = 'exchange-item';
+    wrap.innerHTML = `
+<div class="exchange-chip-svg">${createChipSVG(chip)}</div>
+<div class="exchange-info">
+  <div class="exchange-chip-name">${chip.label} <span style="color:#888">× ${cnt > 9999n ? '많음' : cnt}</span></div>
+  <div class="exchange-arrow">→ ${lower.label} × 10</div>
+</div>
+<button class="pvp-btn primary" style="font-size:.8rem;padding:.35rem .75rem" onclick="doExchange(${chip.idx})">환전</button>`;
+    el.appendChild(wrap);
+  });
+}
+
+function doExchange(chipIdx) {
+  const chip = chipTypes[chipIdx];
+  if (!chip) return;
+  if (chip.idx === 0) { alert('1짜리는 더 이하로 쪼갤 수 없습니다'); return; }
+  const k = chip.value.toString();
+  if ((chipDist[k] || 0n) <= 0n) { alert('해당 토큰이 없습니다'); return; }
+  const lower = chipTypes[chip.idx - 1];
+  const lk = lower.value.toString();
+  chipDist[k] -= 1n;
+  chipDist[lk] = (chipDist[lk] || 0n) + 10n;
+  // chips 총량은 변하지 않음
+  sfxChip();
+  const result = document.getElementById('exchangeResult');
+  if (result) {
+    result.textContent = `${chip.label} 1개 → ${lower.label} 10개`;
+    result.style.opacity = '1';
+    setTimeout(() => { result.style.opacity = '0'; }, 2000);
+  }
+  updateChipsDisplay(); updateSlotChipsDisplay();
+  if (typeof updateAllChipInputs === 'function') updateAllChipInputs();
+  renderExchangeChips();
+}

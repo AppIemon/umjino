@@ -15,6 +15,7 @@
       <button class="nav-group-btn active" data-group="play" onclick="switchTabGroup('play')">🎮 플레이</button>
       <button class="nav-group-btn" data-group="community" onclick="switchTabGroup('community')">👥 커뮤니티</button>
       <button class="nav-group-btn" data-group="admin" onclick="switchTabGroup('admin')">⚙️ 관리</button>
+      <button class="nav-group-btn" data-group="other" onclick="switchTabGroup('other')">⚙ 기타</button>
     </div>
     <div class="nav-actions">
       <button class="nav-icon-btn" onclick="showDM()" style="position:relative" title="DM">
@@ -193,6 +194,39 @@
   </div>
 </div>
 
+<!-- OTHER -->
+<div class="tab-page" id="tabOther">
+  <div class="toto-wrap" style="overflow-y:auto;max-height:100%">
+    <!-- 음악 설정 -->
+    <div class="other-section">
+      <h3 class="other-title">🎵 음악 설정</h3>
+      <div class="other-row">
+        <span>BGM</span>
+        <div class="other-control">
+          <input type="range" id="bgmVolume" min="0" max="100" value="50" class="vol-slider" oninput="setBgmVolume(this.value)">
+          <span id="bgmVolVal">50%</span>
+        </div>
+      </div>
+      <div class="other-row">
+        <span>효과음</span>
+        <div class="other-control">
+          <button class="other-toggle active" id="sfxToggle" onclick="toggleSfx(this)">ON</button>
+          <input type="range" id="sfxVolume" min="0" max="100" value="70" class="vol-slider" oninput="setSfxVolume(this.value)">
+          <span id="sfxVolVal">70%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 환전소 -->
+    <div class="other-section">
+      <h3 class="other-title">💱 환전소</h3>
+      <p class="other-desc">토큰을 클릭하면 하위 토큰 10개로 교환합니다.<br>11개 이상이 될 때까지 자동으로 합산되지 않습니다.</p>
+      <div class="exchange-chips" id="exchangeChips"></div>
+      <div class="exchange-result" id="exchangeResult"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ADMIN -->
 <div class="tab-page" id="tabAdmin">
   <div class="toto-wrap"><div id="adminContent"><div class="toto-loading">로딩...</div></div></div>
@@ -279,6 +313,7 @@
 
 <!-- JS 로드 순서 중요 -->
 <script src="./js/utils.js"></script>
+<script src="./js/chip_input.js"></script>
 <script src="./js/core.js"></script>
 <script src="./js/poker.js"></script>
 <script src="./js/roulette.js"></script>

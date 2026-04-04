@@ -979,3 +979,38 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .pvp-hand-info{font-size:.78rem;color:#888}
 .pvp-final-cards{display:flex;gap:1.2rem;flex-wrap:wrap;justify-content:center}
 .pvp-queue-box{text-align:center;padding:1.5rem 1rem}
+
+/* ── 기타 탭 ── */
+#tabOther{background:linear-gradient(135deg,#0a1810,#050f08);overflow-y:auto}
+.other-section{background:rgba(0,0,0,.42);border:1.5px solid rgba(255,255,255,.08);border-radius:14px;padding:1rem 1.1rem;margin-bottom:.8rem}
+.other-title{color:#f1c40f;font-size:.95rem;font-weight:700;margin-bottom:.75rem}
+.other-desc{color:#666;font-size:.78rem;margin-bottom:.8rem;line-height:1.5}
+.other-row{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.45rem 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.other-row:last-child{border-bottom:none}
+.other-row>span{color:#aaa;font-size:.85rem;flex-shrink:0}
+.other-control{display:flex;align-items:center;gap:.6rem;flex:1;justify-content:flex-end}
+.other-control>span{color:#888;font-size:.75rem;min-width:2.5rem;text-align:right}
+.other-toggle{padding:.28rem .75rem;border-radius:20px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#666;cursor:pointer;font-size:.78rem;font-weight:700;transition:all .2s}
+.other-toggle.active{background:rgba(46,204,113,.2);border-color:#2ecc71;color:#2ecc71}
+.vol-slider{-webkit-appearance:none;appearance:none;height:4px;border-radius:4px;background:rgba(255,255,255,.12);outline:none;cursor:pointer;flex:1;max-width:140px}
+.vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#f1c40f;cursor:pointer}
+
+/* ── 환전소 ── */
+.exchange-chips{display:flex;flex-direction:column;gap:.5rem}
+.exchange-item{display:flex;align-items:center;gap:.75rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.5rem .7rem}
+.exchange-chip-svg svg{width:44px!important;height:44px!important}
+.exchange-info{flex:1}
+.exchange-chip-name{font-size:.88rem;color:#f1c40f;font-weight:600}
+.exchange-arrow{font-size:.72rem;color:#888;margin-top:.1rem}
+.exchange-result{text-align:center;color:#2ecc71;font-size:.85rem;font-weight:600;min-height:1.3rem;margin-top:.5rem;transition:opacity .5s}
+
+/* ── 공용 칩 입력 위젯 ── */
+.cip-wrap{display:flex;flex-direction:column;gap:.4rem}
+.cip-chips-scroll{overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+.cip-chips-scroll::-webkit-scrollbar{height:3px}
+.cip-chips-scroll::-webkit-scrollbar-thumb{background:rgba(241,196,15,.3);border-radius:2px}
+.cip-zone-row{display:flex;align-items:center;gap:.5rem}
+.cip-zone{flex:1;min-height:56px;background:radial-gradient(circle,rgba(46,204,113,.12),transparent 70%);border:2px dashed rgba(46,204,113,.4);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:.3rem .5rem}
+.cip-zone-label{font-size:.6rem;color:#2ecc71;font-weight:700}
+.cip-amt{font-size:.95rem;color:#f1c40f;font-weight:700}
+.cip-spin-btn{white-space:nowrap}

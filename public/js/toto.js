@@ -95,11 +95,8 @@ function renderHorseRaceUI(d) {
     <button class="${horseBetType==='rank123'?'btn-primary':'btn-secondary'}" style="font-size:.8rem;padding:.35rem .8rem" onclick="setHorseBetType('rank123')">1·2·3등 순서</button>
   </div>
   <div class="horse-bet-hint">${horseBetHint(d.horses.length)}</div>
-  <div class="horse-bet-row">
-    <input class="slot-bet-inp" id="horseBetAmt" placeholder="베팅액" style="width:120px">
-    <button class="btn-primary" style="font-size:.85rem" onclick="placeHorseBet('${d.id}')">베팅 🏇</button>
-    <button class="btn-secondary" style="font-size:.8rem" onclick="horseSelectedHorses=[]">초기화</button>
-  </div>
+  <div id="horseBetInput"></div>
+  <button class="btn-secondary" style="font-size:.8rem;margin-top:.3rem" onclick="horseSelectedHorses=[]">말 선택 초기화</button>
 </div>` : isRunning ? `<div class="toto-waiting">🏇 레이스 진행 중... ${raceRemain}초</div>` : `<div class="toto-waiting">🎯 다음 베팅 대기 중...</div>`;
 
   el.innerHTML = `
@@ -110,6 +107,15 @@ function renderHorseRaceUI(d) {
 ${lastResultHTML}
 <div class="horse-grid">${horseCards}</div>
 ${betPanel}`;
+
+  // 베팅 위젯 초기화 (innerHTML 후)
+  if (isBetting) {
+    setTimeout(() => {
+      if (document.getElementById('horseBetInput') && !document.getElementById('cipChips_horseBetInput')) {
+        renderChipInput('horseBetInput', { label: '베팅액', spinBtn: false });
+      }
+    }, 20);
+  }
 }
 
 function horseBetHint(numHorses) {
@@ -144,8 +150,8 @@ async function placeHorseBet(raceId) {
   if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
   const need = horseBetType === 'first' ? 1 : 3;
   if (horseSelectedHorses.length < need) { alert(horseBetType==='first'?'말 1마리 선택':'1·2·3등 순서대로 3마리 선택'); return; }
-  const amtStr = document.getElementById('horseBetAmt')?.value?.trim();
-  let amt; try { amt = BigInt(amtStr); } catch(e) { alert('금액 입력'); return; }
+  let amt = chipInputGet('horseBetInput');
+  if (amt <= 0n) { alert('베팅 토큰을 선택하세요'); return; }
   if (amt <= 0n) { alert('0보다 커야 함'); return; }
   if (amt > chips) { alert('칩 부족'); return; }
   try {
@@ -228,7 +234,7 @@ function renderBaseballUI() {
     <button class="bb-pick-btn" onclick="bbSelectPick('${g.id}','away',this)">${g.away}</button>
   </div>
   <div class="baseball-bet-confirm" id="bbConfirm_${g.id}" style="display:none">
-    <input class="slot-bet-inp" id="bbAmt_${g.id}" placeholder="베팅액" style="width:110px">
+    <div id="bbInput_${g.id}"></div>
     <button class="btn-primary" style="font-size:.82rem" onclick="placeBaseballBet('${g.id}')">베팅</button>
   </div>` : ''}
 </div>`;
@@ -241,15 +247,18 @@ function bbSelectPick(gameId, pick, btn) {
   btn.closest('.baseball-bet-row').querySelectorAll('.bb-pick-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   const cf = document.getElementById('bbConfirm_'+gameId);
-  if (cf) cf.style.display = 'flex';
+  if (cf) {
+    cf.style.display = 'flex';
+    if (!document.getElementById('cipChips_bbInput_'+gameId)) renderChipInput('bbInput_'+gameId, {label:'베팅', spinBtn:false});
+  }
 }
 
 async function placeBaseballBet(gameId) {
   if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
   const pick = _bbPicks[gameId];
   if (!pick) { alert('먼저 승리팀을 선택하세요'); return; }
-  const amtStr = document.getElementById('bbAmt_'+gameId)?.value?.trim();
-  let amt; try { amt = BigInt(amtStr); } catch(e) { alert('금액 입력'); return; }
+  let amt = chipInputGet('bbInput_'+gameId);
+  if (amt <= 0n) { alert('베팅 토큰을 선택하세요'); return; }
   if (amt <= 0n) { alert('0보다 커야 함'); return; }
   if (amt > chips) { alert('칩 부족'); return; }
   try {

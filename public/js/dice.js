@@ -14,12 +14,19 @@ function renderDiceUI() {
     <button class="${diceBetType==='exact'?'btn-primary':'btn-secondary'}" onclick="setDiceBetType('exact')">숫자 맞추기 (×7)</button>
   </div>
   <div class="dice-guess-row" id="diceGuessRow">${renderDiceGuessRow()}</div>
+  <div id="diceBetInput"></div>
   <div class="dice-bet-row">
-    <input class="slot-bet-inp" id="diceBetAmt" placeholder="베팅액">
     <button class="btn-primary" id="diceRollBtn" onclick="rollDice()">굴리기 🎲</button>
   </div>
   <div id="diceResult" class="dice-result"></div>
 </div>`;
+}
+
+// 위젯 초기화 (renderDiceUI 호출 후)
+function initDiceInput() {
+  if (document.getElementById('diceBetInput') && !document.getElementById('cipChips_diceBetInput')) {
+    renderChipInput('diceBetInput', { label: '베팅액', spinBtn: false });
+  }
 }
 
 function renderDiceGuessRow() {
@@ -32,7 +39,7 @@ function renderDiceGuessRow() {
   ).join('');
 }
 
-function setDiceBetType(t) { diceBetType = t; diceGuess = t === 'parity' ? 'odd' : 1; renderDiceUI(); }
+function setDiceBetType(t) { diceBetType = t; diceGuess = t === 'parity' ? 'odd' : 1; renderDiceUI(); setTimeout(initDiceInput,20); }
 function setDiceGuess(g) {
   diceGuess = g;
   document.getElementById('diceGuessRow').innerHTML = renderDiceGuessRow();
@@ -42,10 +49,8 @@ const DICE_FACES = ['','⚀','⚁','⚂','⚃','⚄','⚅'];
 
 async function rollDice() {
   if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
-  const amtStr = document.getElementById('diceBetAmt')?.value?.trim();
-  let amt; try { amt = BigInt(amtStr); } catch(e) { alert('금액 입력'); return; }
-  if (amt <= 0n) { alert('0보다 커야 함'); return; }
-  if (amt > chips) { alert('칩 부족'); return; }
+  let amt = chipInputGet('diceBetInput');
+  if (amt <= 0n) { alert('베팅 토큰을 선택하세요'); return; }
 
   const btn = document.getElementById('diceRollBtn'); btn.disabled = true;
   const display = document.getElementById('diceDisplay');
@@ -70,7 +75,12 @@ async function rollDice() {
 
     if (!res.ok) { document.getElementById('diceResult').textContent = d.error; btn.disabled = false; return; }
 
-    chips = BigInt(d.newChips); chipDist = computeGreedyDist(chips);
+    // 차감은 chipInputThrow에서 이미 됨. newChips에서 win/lose 차이만 반영
+    const serverChips = BigInt(d.newChips);
+    const diff = serverChips - chips; // 순수 win/loss (amt 이미 차감된 상태)
+    if (diff > 0n) addChipsToDist(diff);
+    chips = serverChips;
+    chipInputClear('diceBetInput');
     updateChipsDisplay(); updateSlotChipsDisplay();
 
     const result = document.getElementById('diceResult');

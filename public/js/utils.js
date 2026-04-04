@@ -329,3 +329,30 @@ function rankChipHTML(n) {
   const cls = `rank-val-plus${Math.min(plusCount, 3)}`;
   return `<span class="${cls}">${s}</span>`;
 }
+
+// ── 환전: 11개 미만이면 병합 안 함 ──────────
+// 환전소에서 쪼갠 칩은 11개 이상 쌓일 때까지 자동 합산 안 됨
+// 일반 게임 결과는 addChipsToDist로 기존 분배 유지하며 더함
+function addChipsToDist(amount) {
+  let rem = amount;
+  // 이미 있는 분배는 유지하고, 새로 얻은 칩만 그리디로 분배해서 더함
+  for (let i = chipTypes.length - 1; i >= 0; i--) {
+    const cv = chipTypes[i].value, k = cv.toString();
+    const q = rem / cv;
+    if (q > 0n) { chipDist[k] = (chipDist[k] || 0n) + q; rem = rem % cv; }
+  }
+}
+
+// 환전: chip 하나 → 10개 하위 칩 (합쳐지지 않음)
+function exchangeChip(chip) {
+  const k = chip.value.toString();
+  if ((chipDist[k] || 0n) <= 0n) return false;
+  // 하위 칩 찾기
+  const lowerIdx = chip.idx - 1;
+  if (lowerIdx < 0) return false; // 1짜리는 쪼갤 수 없음
+  const lower = chipTypes[lowerIdx];
+  const lk = lower.value.toString();
+  chipDist[k] -= 1n;
+  chipDist[lk] = (chipDist[lk] || 0n) + 10n;
+  return true;
+}
