@@ -98,11 +98,15 @@ function slotThrowChip(chip, e) {
 }
 
 function slotClearBet() {
-  chips += slotBet; slotBet = 0n; slotBetDist = {}; slotBetDeducted = false;
+  // slotBetDeducted=true일 때만 chips에서 차감된 상태 → 환불
+  if (slotBetDeducted) {
+    chips += slotBet;
+  }
+  slotBet = 0n; slotBetDist = {}; slotBetDeducted = false;
   chipDist = computeGreedyDist(chips);
   const bz = document.getElementById('slotBetZone');
   if (bz) bz.querySelectorAll('.bet-token').forEach(t => t.remove());
-  updateChipsDisplay(); updateSlotBetDisplay(); saveState();
+  updateChipsDisplay(); updateSlotBetDisplay(); updateSlotChipsDisplay(); saveState();
 }
 
 function updateSlotBetDisplay() {
