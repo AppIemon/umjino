@@ -176,13 +176,13 @@ function renderSlotMachines() {
 <div class="slot-winlines" id="smWL${m.id}"></div>
 <div class="slot-result-msg" id="smResult${m.id}"></div>
 <div class="slot-paytable-mini">
-  <div class="spm-sym">7️⃣ ×3/4/5</div><div class="spm-val">×50/220/700</div>
-  <div class="spm-sym">💎 ×3/4/5</div><div class="spm-val">×25/110/340</div>
-  <div class="spm-sym">⭐ ×3/4/5</div><div class="spm-val">×13/55/170</div>
-  <div class="spm-sym">🔔 ×3/4/5</div><div class="spm-val">×8/33/100</div>
-  <div class="spm-sym">🍇 ×3/4/5</div><div class="spm-val">×5/20/60</div>
-  <div class="spm-sym">🍋 ×3/4/5</div><div class="spm-val">×3/12/35</div>
-  <div class="spm-sym">🍒 ×3/4/5</div><div class="spm-val">×2/7/20</div>
+  <div class="spm-sym">7️⃣ ×3/4/5</div><div class="spm-val">×${SLOT_PAY[3]['7️⃣']}/${SLOT_PAY[4]['7️⃣']}/${SLOT_PAY[5]['7️⃣']}</div>
+  <div class="spm-sym">💎 ×3/4/5</div><div class="spm-val">×${SLOT_PAY[3]['💎']}/${SLOT_PAY[4]['💎']}/${SLOT_PAY[5]['💎']}</div>
+  <div class="spm-sym">⭐ ×3/4/5</div><div class="spm-val">×${SLOT_PAY[3]['⭐']}/${SLOT_PAY[4]['⭐']}/${SLOT_PAY[5]['⭐']}</div>
+  <div class="spm-sym">🔔 ×3/4/5</div><div class="spm-val">×${SLOT_PAY[3]['🔔']}/${SLOT_PAY[4]['🔔']}/${SLOT_PAY[5]['🔔']}</div>
+  <div class="spm-sym">🍇 ×3/4/5</div><div class="spm-val">×${SLOT_PAY[3]['🍇']}/${SLOT_PAY[4]['🍇']}/${SLOT_PAY[5]['🍇']}</div>
+  <div class="spm-sym">🍋 ×3/4/5</div><div class="spm-val">×${SLOT_PAY[3]['🍋']}/${SLOT_PAY[4]['🍋']}/${SLOT_PAY[5]['🍋']}</div>
+  <div class="spm-sym">🍒 ×3/4/5</div><div class="spm-val">×${SLOT_PAY[3]['🍒']}/${SLOT_PAY[4]['🍒']}/${SLOT_PAY[5]['🍒']}</div>
 </div>`;
     area.appendChild(div);
   });

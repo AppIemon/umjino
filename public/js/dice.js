@@ -11,7 +11,7 @@ function renderDiceUI() {
   <div id="diceDisplay" class="dice-face">🎲</div>
   <div class="dice-bet-types">
     <button class="${diceBetType==='parity'?'btn-primary':'btn-secondary'}" onclick="setDiceBetType('parity')">홀짝 (×2)</button>
-    <button class="${diceBetType==='exact'?'btn-primary':'btn-secondary'}" onclick="setDiceBetType('exact')">숫자 맞추기 (×6)</button>
+    <button class="${diceBetType==='exact'?'btn-primary':'btn-secondary'}" onclick="setDiceBetType('exact')">숫자 맞추기 (×7)</button>
   </div>
   <div class="dice-guess-row" id="diceGuessRow">${renderDiceGuessRow()}</div>
   <div class="dice-bet-row">
