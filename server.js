@@ -1566,16 +1566,53 @@ app.post('/api/baseball', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // INVESTMENT  /api/invest
 // ═══════════════════════════════════════════════════════════
-// 투자: 다른 유저의 칩 잔액에 투자 → 그 유저 잔액 변동에 따라 수익/손실
-// investment doc: { investor, target, amount(원금), currentValue, createdAt, updatedAt }
 app.get('/api/invest', async (req, res) => {
   const { nick, token } = req.query;
   try {
     const db = await getDb();
     const p = await db.collection('players').findOne({ nickname: nick, token });
     if (!p) return res.status(401).json({ error: '인증 실패' });
-    const invs = await db.collection('investments').find({ investor: nick }).toArray();
-    res.json(invs.map(i => ({ id: i._id.toString(), target: i.target, amount: i.amount, currentValue: i.currentValue, createdAt: i.createdAt })));
+    const invCol = db.collection('investments');
+    const plCol = db.collection('players');
+    const invs = await invCol.find({ investor: nick }).sort({ createdAt: -1 }).toArray();
+
+    // 각 투자의 현재가치 = 원금 * (대상 현재칩 / 기준칩)
+    const result = await Promise.all(invs.map(async inv => {
+      let currentValue = inv.currentValue || inv.amount;
+      let pct = 0;
+      try {
+        const tgt = await plCol.findOne({ nickname: inv.target }, { projection: { chips: 1 } });
+        if (tgt && inv.baselineTargetChips) {
+          const base = BigInt(inv.baselineTargetChips);
+          const cur = BigInt(tgt.chips || '0');
+          const amt = BigInt(inv.amount);
+          if (base > 0n) {
+            currentValue = (amt * cur / base).toString();
+            const diff = Number(cur - base);
+            pct = base > 0n ? Math.round(diff / Number(base) * 1000) / 10 : 0;
+          }
+        }
+      } catch(e) {}
+
+      // 히스토리 포인트 추가 (1시간마다 자동)
+      const history = inv.history || [];
+      const lastPoint = history[history.length - 1];
+      const nowMs = Date.now();
+      if (!lastPoint || nowMs - new Date(lastPoint.t).getTime() > 3600000) {
+        await invCol.updateOne({ _id: inv._id }, {
+          $set: { currentValue },
+          $push: { history: { t: new Date(), v: currentValue } }
+        });
+      }
+
+      return {
+        id: inv._id.toString(), target: inv.target,
+        amount: inv.amount, currentValue,
+        pct, createdAt: inv.createdAt,
+        history: (inv.history || []).concat({ t: new Date(), v: currentValue }),
+      };
+    }));
+    res.json(result);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1592,27 +1629,24 @@ app.post('/api/invest', async (req, res) => {
     const amt = BigInt(amount || '0');
     if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
     if (BigInt(p.chips) < amt) return res.status(400).json({ error: '칩 부족' });
-    // Deduct from investor, add to target
     await col.updateOne({ nickname }, { $set: { chips: (BigInt(p.chips) - amt).toString() } });
     await col.updateOne({ nickname: target }, { $set: { chips: (BigInt(targetUser.chips) + amt).toString() } });
-    // Record investment
     const now = new Date();
-    const baselineChips = BigInt(targetUser.chips) + amt;
+    const baselineTargetChips = (BigInt(targetUser.chips) + amt).toString();
     await db.collection('investments').insertOne({
       investor: nickname, target, amount: amt.toString(), currentValue: amt.toString(),
-      baselineTargetChips: baselineChips.toString(), createdAt: now, updatedAt: now,
+      baselineTargetChips, history: [{ t: now, v: amt.toString() }],
+      createdAt: now, updatedAt: now,
     });
-    // Send DM notification
     const convs = db.collection('conversations');
     const msgs = db.collection('messages');
     let conv = await convs.findOne({ type: 'dm', participants: { $all: [nickname, target], $size: 2 } });
     if (!conv) { const r = await convs.insertOne({ type: 'dm', participants: [nickname, target], lastRead: {}, createdAt: now, updatedAt: now }); conv = await convs.findOne({ _id: r.insertedId }); }
-    await msgs.insertOne({ convId: conv._id.toString(), sender: '__system__', type: 'text', content: `💰 ${nickname}님이 당신에게 ${amount}칩을 투자했습니다!`, createdAt: now });
+    await msgs.insertOne({ convId: conv._id.toString(), sender: '__system__', type: 'text', content: `💰 ${nickname}님이 ${amount}칩을 투자했습니다!`, createdAt: now });
     await convs.updateOne({ _id: conv._id }, { $set: { updatedAt: now } });
     res.json({ ok: true, newChips: (BigInt(p.chips) - amt).toString() });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
-
 // ═══════════════════════════════════════════════════════════
 // ADMIN  /api/admin
 // ═══════════════════════════════════════════════════════════

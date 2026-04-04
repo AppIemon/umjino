@@ -917,3 +917,65 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .bb-score.live{color:#e74c3c;animation:pulse .8s infinite}
 .baseball-card.live{border-color:rgba(231,76,60,.5);box-shadow:0 0 12px rgba(231,76,60,.2)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* ── 투자 차트 카드 ── */
+.invest-card{background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.1);border-radius:12px;padding:.75rem;margin-bottom:.65rem;overflow:hidden}
+.invest-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem}
+.invest-target{font-size:.95rem;font-weight:700;color:#f1c40f}
+.invest-date{font-size:.68rem;color:#555;margin-top:.15rem}
+.invest-pct{font-size:1.1rem;font-weight:700}
+.invest-pct.up{color:#2ecc71}
+.invest-pct.down{color:#e74c3c}
+.invest-cur{font-size:.85rem;color:#ddd;font-weight:600;margin-top:.1rem}
+.invest-org{font-size:.68rem;color:#555}
+.invest-chart{width:100%;display:block;border-radius:6px;background:rgba(0,0,0,.3)}
+
+/* ── PVP 세븐포커 ── */
+.pvp-game{display:flex;flex-direction:column;gap:.55rem;padding:.65rem;max-width:520px;margin:0 auto;width:100%}
+.pvp-info-bar{display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,.45);border-radius:12px;padding:.55rem .75rem;border:1px solid rgba(255,255,255,.08)}
+.pvp-player{flex:1}
+.pvp-nick{font-size:.82rem;font-weight:700}
+.pvp-nick.me{color:#2ecc71}.pvp-nick.op{color:#e74c3c}
+.pvp-chips{font-size:.72rem;color:#888;margin-top:.1rem}
+.pvp-fold-tag{display:inline-block;font-size:.6rem;background:rgba(231,76,60,.25);color:#e74c3c;padding:.1rem .35rem;border-radius:8px;margin-top:.15rem}
+.pvp-player.folded .pvp-nick{opacity:.45}
+.pvp-pot-box{text-align:center;flex-shrink:0;padding:0 .6rem}
+.pvp-phase-label{font-size:.65rem;color:#888;margin-bottom:.1rem}
+.pvp-pot{font-size:1rem;color:#f1c40f;font-weight:700}
+.pvp-ante{font-size:.62rem;color:#555;margin-top:.05rem}
+.pvp-section{background:rgba(0,0,0,.3);border-radius:10px;padding:.5rem .6rem}
+.pvp-section-label{font-size:.68rem;font-weight:700;margin-bottom:.35rem}
+.pvp-section-label.me{color:#2ecc71}.pvp-section-label.op{color:#e74c3c}
+.pvp-cards-row{display:flex;gap:.3rem;flex-wrap:wrap;align-items:flex-end}
+.pvp-card-wrap{cursor:default;border-radius:7px;transition:transform .15s;position:relative}
+.pvp-card-wrap.discardable{cursor:pointer;border:2px solid rgba(231,76,60,.4);border-radius:7px}
+.pvp-card-wrap.discardable:hover{transform:translateY(-4px);border-color:#e74c3c}
+.pvp-card-wrap.selected{border:2px solid #e74c3c;border-radius:7px;transform:translateY(-6px);box-shadow:0 4px 12px rgba(231,76,60,.4)}
+.pvp-discard-label{text-align:center;font-size:.55rem;color:rgba(231,76,60,.7);margin-top:.15rem;font-weight:700}
+.pvp-card-wrap.selected .pvp-discard-label{color:#e74c3c}
+.pvp-no-cards{color:#444;font-size:.78rem;padding:.5rem 0}
+.pvp-confirm-discard{display:block;width:100%;margin-top:.5rem;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;border:none;border-radius:9px;padding:.45rem .8rem;font-weight:700;cursor:pointer;font-size:.85rem;transition:all .2s}
+.pvp-confirm-discard:hover{transform:scale(1.03)}
+.pvp-action-area{min-height:2.5rem}
+.pvp-action-prompt{text-align:center;padding:.5rem;color:#aaa;font-size:.85rem}
+.pvp-action-prompt.muted{color:#555}
+.pvp-action-prompt p{color:#888;font-size:.78rem;margin-bottom:.6rem}
+.pvp-bet-actions{display:flex;flex-direction:column;gap:.4rem}
+.pvp-bet-info{font-size:.65rem;color:#666;text-align:center}
+.pvp-btn-row{display:flex;gap:.35rem;flex-wrap:wrap;justify-content:center}
+.pvp-btn{border:none;border-radius:9px;padding:.45rem .9rem;font-weight:700;cursor:pointer;font-size:.82rem;transition:all .2s cubic-bezier(.34,1.56,.64,1);white-space:nowrap}
+.pvp-btn:hover{transform:scale(1.06)}
+.pvp-btn.primary{background:linear-gradient(135deg,#27ae60,#1e8449);color:white}
+.pvp-btn.raise{background:linear-gradient(135deg,#3498db,#2980b9);color:white}
+.pvp-btn.raise.full{background:linear-gradient(135deg,#e67e22,#d35400)}
+.pvp-btn.fold{background:rgba(231,76,60,.15);color:#e74c3c;border:1px solid rgba(231,76,60,.4)}
+.pvp-btn.secondary{background:rgba(255,255,255,.1);color:#aaa;border:1px solid rgba(255,255,255,.2)}
+.pvp-status{text-align:center;font-size:.75rem;color:#555;min-height:1.2rem}
+.pvp-notice{text-align:center;padding:1rem;border-radius:10px;font-size:.88rem}
+.pvp-notice.warn{color:#e67e22;background:rgba(230,126,34,.1);border:1px solid rgba(230,126,34,.3)}
+.pvp-gameover{text-align:center;padding:1rem;display:flex;flex-direction:column;gap:.6rem;align-items:center}
+.pvp-result-msg{font-size:2.2rem;font-weight:900;animation:winPop .6s cubic-bezier(.34,1.56,.64,1)}
+.pvp-pot-result{font-size:1rem;color:#f1c40f;font-weight:700}
+.pvp-hand-info{font-size:.78rem;color:#888}
+.pvp-final-cards{display:flex;gap:1.2rem;flex-wrap:wrap;justify-content:center}
+.pvp-queue-box{text-align:center;padding:1.5rem 1rem}

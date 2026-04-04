@@ -196,16 +196,86 @@ async function loadInvestments() {
   const el = document.getElementById('investContent');
   if (!el) return;
   if (!sessionNickname) { el.innerHTML = '<div class="toto-empty">로그인 필요</div>'; return; }
+  el.innerHTML = '<div class="toto-loading">투자 내역 로딩...</div>';
   try {
-    const res = await fetchT(`/api/invest?nick=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`, null, 5000);
+    const res = await fetchT(`/api/invest?nick=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`, null, 8000);
     const invs = await res.json();
-    if (!invs.length) { el.innerHTML = '<div class="toto-empty">투자 내역 없음</div>'; return; }
-    el.innerHTML = `<table class="ranking-table"><thead><tr><th>대상</th><th>원금</th><th>현재가치</th><th>날짜</th></tr></thead><tbody>
-      ${invs.map(i=>`<tr><td>${escHtml(i.target)}</td><td>${shortFmt(BigInt(i.amount||'0'))}</td><td>${shortFmt(BigInt(i.currentValue||'0'))}</td><td>${new Date(i.createdAt).toLocaleDateString('ko-KR')}</td></tr>`).join('')}
-    </tbody></table>`;
+    if (!invs.length) { el.innerHTML = '<div class="toto-empty">투자 내역 없음<br><small style="color:#555">프로필에서 투자 가능</small></div>'; return; }
+    el.innerHTML = invs.map(inv => {
+      const amt = BigInt(inv.amount || '0');
+      const cur = BigInt(inv.currentValue || '0');
+      const pct = inv.pct || 0;
+      const isUp = pct >= 0;
+      const pctStr = (isUp ? '+' : '') + pct.toFixed(1) + '%';
+      const chartId = 'investChart_' + inv.id.slice(-6);
+      return `<div class="invest-card">
+<div class="invest-header">
+  <div>
+    <div class="invest-target">📈 ${escHtml(inv.target)}</div>
+    <div class="invest-date">${new Date(inv.createdAt).toLocaleDateString('ko-KR')} 투자</div>
+  </div>
+  <div style="text-align:right">
+    <div class="invest-pct ${isUp?'up':'down'}">${pctStr}</div>
+    <div class="invest-cur">${shortFmt(cur)}칩</div>
+    <div class="invest-org">원금 ${shortFmt(amt)}</div>
+  </div>
+</div>
+<canvas class="invest-chart" id="${chartId}" height="70"></canvas>
+</div>`;
+    }).join('');
+    // 차트 그리기 (DOM 업데이트 후)
+    setTimeout(() => {
+      invs.forEach(inv => {
+        const canvas = document.getElementById('investChart_' + inv.id.slice(-6));
+        if (canvas && inv.history?.length >= 2) drawInvestChart(canvas, inv.history);
+        else if (canvas) {
+          canvas.width = canvas.offsetWidth || 300; canvas.height = 70;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#333'; ctx.fillRect(0,0,canvas.width,70);
+          ctx.fillStyle='#555';ctx.font='11px Arial';ctx.textAlign='center';
+          ctx.fillText('데이터 수집 중...',canvas.width/2,38);
+        }
+      });
+    }, 50);
   } catch(e) { el.innerHTML = '<div class="toto-err">로드 실패</div>'; }
 }
 
+function drawInvestChart(canvas, history) {
+  const W = canvas.offsetWidth || 300;
+  canvas.width = W; canvas.height = 70;
+  const ctx = canvas.getContext('2d');
+  const vals = history.map(h => { try { return Number(BigInt(h.v||'0')); } catch(e){ return 0; } });
+  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  const range = maxV - minV || 1;
+  const pad = { t:6, b:18, l:6, r:6 };
+  const W2 = W-pad.l-pad.r, H2 = 70-pad.t-pad.b;
+  const isUp = vals[vals.length-1] >= vals[0];
+  const lineColor = isUp ? '#2ecc71' : '#e74c3c';
+  const fillColor = isUp ? 'rgba(46,204,113,0.18)' : 'rgba(231,76,60,0.18)';
+  const pts = vals.map((v,i) => ({
+    x: pad.l + (vals.length>1 ? i/(vals.length-1) : 0.5)*W2,
+    y: pad.t + H2 - ((v-minV)/range)*H2
+  }));
+  ctx.clearRect(0,0,W,70);
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=1;
+  [0.33,0.66].forEach(r=>{const y=pad.t+H2*r;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();});
+  // fill
+  ctx.beginPath();ctx.moveTo(pts[0].x,pad.t+H2);
+  pts.forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.lineTo(pts[pts.length-1].x,pad.t+H2);ctx.closePath();
+  ctx.fillStyle=fillColor;ctx.fill();
+  // line
+  ctx.beginPath();ctx.strokeStyle=lineColor;ctx.lineWidth=2;ctx.lineJoin='round';
+  pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.stroke();
+  // dot
+  const last=pts[pts.length-1];
+  ctx.beginPath();ctx.arc(last.x,last.y,3.5,0,Math.PI*2);ctx.fillStyle=lineColor;ctx.fill();
+  // labels
+  ctx.fillStyle='#555';ctx.font='9px Arial';
+  ctx.textAlign='left';ctx.fillText(new Date(history[0].t).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'}),pad.l,68);
+  ctx.textAlign='right';ctx.fillText(new Date(history[history.length-1].t).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'}),W-pad.r,68);
+}
 // ── Music ────────────────────────────────────
 function toggleMusic(){
   const btn=document.getElementById('musicButton');
