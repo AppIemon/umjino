@@ -116,23 +116,9 @@ function renderSlotChipStacks() {
   const container = document.getElementById('slotChipStacks');
   if (!container) return;
   container.innerHTML = '';
-  for (let i = chipTypes.length - 1; i >= 0; i--) {
-    const chip = chipTypes[i];
-    const cnt = chipDist[chip.value.toString()] || 0n;
-    if (cnt <= 0n) continue;
-    const stack = document.createElement('div');
-    stack.className = 'chip-stack';
-    stack.innerHTML = createChipSVG(chip);
-    stack.title = formatBig(chip.value) + ' × ' + cnt;
-    if (cnt > 1n) {
-      const badge = document.createElement('div');
-      badge.className = 'chip-count';
-      badge.textContent = cnt > 99n ? '99+' : cnt.toString();
-      stack.appendChild(badge);
-    }
-    stack.onclick = (e) => slotThrowChip(chip, e);
-    container.appendChild(stack);
-  }
+  getDisplayChips().forEach(({ chip, cnt }) => {
+    container.appendChild(_makeChipStack(chip, cnt, (c, e) => slotThrowChip(c, e)));
+  });
 }
 
 function renderSlotMachines() {

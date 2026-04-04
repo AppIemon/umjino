@@ -303,7 +303,6 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .rl-players-row{display:flex;flex-wrap:wrap;gap:.28rem;width:100%}
 .rl-player-badge{display:inline-flex;align-items:center;gap:.22rem;padding:.15rem .45rem;border-radius:18px;font-size:.68rem;font-weight:bold;color:white;border:1.5px solid rgba(255,255,255,.28)}
 .rl-chip-row{display:flex;gap:.22rem;overflow-x:auto;width:100%;padding-bottom:2px}
-.rl-chip-row .chip-stack .chip-svg{width:40px;height:40px}
 .rl-chip-row .chip-count{width:17px;height:17px;font-size:.52rem;top:-5px;right:-5px}
 .rl-sel-display{background:rgba(0,0,0,.42);border:1px solid rgba(241,196,15,.28);border-radius:7px;padding:.3rem .65rem;color:#f1c40f;font-size:.78rem;text-align:center;width:100%;min-height:1.7rem}
 .rl-bet-row-btns{display:flex;gap:.35rem;width:100%}
