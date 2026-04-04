@@ -178,7 +178,6 @@ function mpActionHTML(d){
 </div>
 </div>`;
   }
-  }
   return'';
 }
 
