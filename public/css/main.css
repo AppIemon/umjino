@@ -1366,3 +1366,421 @@ body { font-family: 'Noto Sans KR', sans-serif; }
 ::-webkit-scrollbar-track { background:rgba(255,255,255,.03); }
 ::-webkit-scrollbar-thumb { background:rgba(241,196,15,.2);border-radius:3px; }
 ::-webkit-scrollbar-thumb:hover { background:rgba(241,196,15,.4); }
+
+/* ════════════════════════════════════════════
+   FLUID UI — 유기적 레이아웃, 부드러운 흐름
+   ════════════════════════════════════════════ */
+
+/* 전역 트랜지션 */
+*, *::before, *::after {
+  transition-timing-function: cubic-bezier(.4,0,.2,1);
+}
+
+/* body 배경 — 살아있는 느낌의 그라디언트 */
+body {
+  background: #030706;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+/* ── 탭 배경 — 딱딱한 그라디언트 대신 깊이감 ── */
+#tabPoker {
+  background:
+    radial-gradient(ellipse 80% 60% at 30% 20%, rgba(34,120,60,.25) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(20,80,40,.15) 0%, transparent 50%),
+    #040e07;
+}
+#tabRoulette {
+  background:
+    radial-gradient(ellipse 70% 50% at 20% 30%, rgba(120,20,20,.2) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 75% 70%, rgba(80,10,10,.15) 0%, transparent 50%),
+    #060202;
+}
+#tabSlot {
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 10%, rgba(60,50,160,.2) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 30% at 20% 80%, rgba(40,30,120,.12) 0%, transparent 50%),
+    #030208;
+}
+#tabPvp {
+  background:
+    radial-gradient(ellipse 70% 50% at 40% 20%, rgba(20,100,50,.2) 0%, transparent 55%),
+    #030907;
+}
+#tabToto {
+  background:
+    radial-gradient(ellipse 80% 50% at 60% 20%, rgba(100,70,10,.2) 0%, transparent 55%),
+    #060401;
+}
+#tabDice {
+  background:
+    radial-gradient(ellipse 60% 50% at 30% 20%, rgba(80,20,120,.2) 0%, transparent 55%),
+    #050108;
+}
+#tabYacht {
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 15%, rgba(10,40,100,.2) 0%, transparent 55%),
+    #010408;
+}
+#tabCommunity, #tabAdmin, #tabOther {
+  background:
+    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(20,60,30,.15) 0%, transparent 50%),
+    #020604;
+}
+
+/* ── 포커 — 경계선 없이 깊이로 구분 ── */
+.main-area { padding:.7rem .9rem; }
+
+.player-chips-area {
+  background: rgba(0,0,0,.0);
+  border-top: none;
+  padding:.7rem .9rem;
+  position: relative;
+}
+.player-chips-area::before {
+  content:'';
+  position:absolute;top:0;left:5%;right:5%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(241,196,15,.25),transparent);
+}
+
+.betting-zone {
+  border: none;
+  background:
+    radial-gradient(ellipse 60% 70% at 50% 50%, rgba(46,204,113,.08) 0%, transparent 70%);
+  box-shadow:
+    inset 0 0 40px rgba(46,204,113,.06),
+    0 0 0 1.5px rgba(46,204,113,.2);
+  border-radius: 20px;
+  transition: box-shadow .4s ease;
+}
+.betting-zone:hover {
+  box-shadow:
+    inset 0 0 60px rgba(46,204,113,.1),
+    0 0 0 1.5px rgba(46,204,113,.4),
+    0 0 20px rgba(46,204,113,.08);
+}
+
+/* 카드 — 더 부드러운 호버 */
+.card {
+  border-radius: 10px;
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1), box-shadow .3s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.5);
+}
+.card:hover { transform: translateY(-10px) rotate(.8deg); box-shadow:0 14px 28px rgba(0,0,0,.5); }
+.card.selected {
+  transform: translateY(-22px) scale(1.04);
+  box-shadow: 0 16px 40px rgba(241,196,15,.3), 0 0 0 2px rgba(241,196,15,.5);
+}
+
+/* ── 버튼 — 경계선 없이 그림자로 ── */
+.btn-primary {
+  border: none;
+  box-shadow: 0 4px 16px rgba(241,196,15,.2), 0 1px 3px rgba(0,0,0,.4);
+}
+.btn-primary:hover {
+  box-shadow: 0 8px 28px rgba(241,196,15,.35), 0 2px 8px rgba(0,0,0,.3);
+  transform: translateY(-3px) scale(1.03);
+}
+.btn-secondary {
+  border: none;
+  background: rgba(255,255,255,.07);
+  box-shadow: 0 2px 8px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.btn-secondary:hover {
+  background: rgba(255,255,255,.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.12);
+  transform: translateY(-2px);
+}
+.action-button {
+  border: none;
+  box-shadow: 0 3px 12px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.12);
+}
+.deal-button { box-shadow: 0 4px 16px rgba(46,204,113,.2); }
+.draw-button { box-shadow: 0 4px 16px rgba(52,152,219,.2); }
+.clear-button { box-shadow: 0 4px 16px rgba(230,126,34,.2); }
+
+/* ── 칩 스택 — 공중에 뜨는 느낌 ── */
+.chip-stack {
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,.5));
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1), filter .2s ease;
+}
+.chip-stack:hover {
+  transform: scale(1.15) translateY(-3px);
+  filter: drop-shadow(0 8px 16px rgba(0,0,0,.6)) drop-shadow(0 0 8px rgba(241,196,15,.2));
+}
+.chip-stack:active { transform: scale(.95); }
+.chip-svg { filter: none; }
+
+/* ── 모달 — 부드러운 등장 ── */
+.modal-overlay {
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(12px) saturate(1.2);
+}
+.modal-box, .ranking-modal {
+  background: rgba(8,18,10,.92);
+  border: none;
+  box-shadow:
+    0 24px 80px rgba(0,0,0,.8),
+    0 0 0 1px rgba(255,255,255,.06),
+    inset 0 1px 0 rgba(255,255,255,.05);
+  backdrop-filter: blur(20px);
+}
+@keyframes modalSlideUp {
+  from { transform: translateY(30px) scale(.96); opacity:0; }
+  to   { transform: translateY(0)    scale(1);   opacity:1; }
+}
+
+/* ── DM 패널 ── */
+.dm-panel {
+  background: rgba(8,16,10,.94);
+  border: none;
+  box-shadow:
+    0 24px 80px rgba(0,0,0,.8),
+    0 0 0 1px rgba(46,204,113,.12),
+    inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter: blur(20px);
+}
+.dm-header {
+  background: rgba(0,0,0,.3);
+  border-bottom: none;
+  position: relative;
+}
+.dm-header::after {
+  content:'';position:absolute;bottom:0;left:5%;right:5%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent);
+}
+.dm-bubble {
+  border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  border-radius: 14px;
+}
+.dm-msg-me .dm-bubble {
+  background: rgba(46,204,113,.18);
+  box-shadow: 0 2px 8px rgba(46,204,113,.1);
+}
+
+/* ── 슬롯 — 기계 느낌 제거 ── */
+.slot-machine {
+  border: none;
+  background: rgba(8,10,22,.7);
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    0 0 0 1px rgba(100,100,200,.12),
+    inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter: blur(8px);
+}
+.slot-grid {
+  border: none;
+  background: rgba(0,0,0,.5);
+  box-shadow:
+    inset 0 4px 12px rgba(0,0,0,.5),
+    0 0 0 1px rgba(100,100,200,.1);
+  border-radius: 12px;
+}
+.slot-cell {
+  border: none;
+  background: rgba(10,12,30,.6);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.4);
+  border-radius: 8px;
+  transition: background .15s, box-shadow .15s, transform .1s;
+}
+.slot-cell.win3 {
+  background: rgba(46,204,113,.18);
+  box-shadow: 0 0 16px rgba(46,204,113,.3), inset 0 0 8px rgba(46,204,113,.15);
+}
+.slot-cell.win4 {
+  background: rgba(52,152,219,.2);
+  box-shadow: 0 0 20px rgba(52,152,219,.4), inset 0 0 10px rgba(52,152,219,.2);
+}
+.slot-cell.win5 {
+  background: rgba(241,196,15,.2);
+  box-shadow: 0 0 28px rgba(241,196,15,.5), inset 0 0 14px rgba(241,196,15,.25);
+  animation: win5Pulse 1s ease infinite alternate;
+}
+@keyframes win5Pulse {
+  from { box-shadow: 0 0 20px rgba(241,196,15,.4), inset 0 0 10px rgba(241,196,15,.2); }
+  to   { box-shadow: 0 0 40px rgba(241,196,15,.7), inset 0 0 20px rgba(241,196,15,.35); }
+}
+
+/* ── 요트 주사위 — 공중에 떠있는 느낌 ── */
+.yacht-panel { gap:.75rem; }
+.yacht-header, .yacht-dice-area, .yacht-scores {
+  border: none;
+  background: rgba(0,0,0,.35);
+  box-shadow:
+    0 4px 20px rgba(0,0,0,.4),
+    0 0 0 1px rgba(255,255,255,.05),
+    inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter: blur(6px);
+}
+.yacht-die {
+  border: none;
+  background: rgba(255,255,255,.07);
+  box-shadow:
+    0 4px 12px rgba(0,0,0,.4),
+    inset 0 1px 0 rgba(255,255,255,.08),
+    0 0 0 1px rgba(255,255,255,.06);
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+}
+.yacht-die:hover:not(.unrolled) {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 10px 28px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12);
+}
+.yacht-die.held {
+  background: rgba(241,196,15,.15);
+  box-shadow:
+    0 8px 24px rgba(241,196,15,.2),
+    0 0 0 1.5px rgba(241,196,15,.5),
+    inset 0 1px 0 rgba(255,255,255,.1);
+  transform: translateY(-8px) scale(1.06);
+}
+
+/* ── 토토 — 경마/야구 카드 ── */
+.horse-card {
+  border: none;
+  background: rgba(255,255,255,.04);
+  box-shadow:
+    0 2px 8px rgba(0,0,0,.3),
+    0 0 0 1px rgba(255,255,255,.05),
+    inset 0 1px 0 rgba(255,255,255,.04);
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+}
+.horse-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 10px 28px rgba(0,0,0,.4), 0 0 0 1px rgba(241,196,15,.2);
+}
+.horse-card.selected {
+  background: rgba(241,196,15,.1);
+  box-shadow:
+    0 10px 32px rgba(241,196,15,.15),
+    0 0 0 1.5px rgba(241,196,15,.5);
+  transform: translateY(-6px) scale(1.03);
+}
+.baseball-card {
+  border: none;
+  background: rgba(255,255,255,.04);
+  box-shadow:
+    0 2px 12px rgba(0,0,0,.35),
+    0 0 0 1px rgba(255,255,255,.05),
+    inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+/* ── 투자 카드 ── */
+.invest-card {
+  border: none;
+  background: rgba(255,255,255,.04);
+  box-shadow:
+    0 4px 20px rgba(0,0,0,.4),
+    0 0 0 1px rgba(255,255,255,.05),
+    inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter: blur(4px);
+}
+
+/* ── 기타 섹션 ── */
+.other-section {
+  border: none;
+  background: rgba(0,0,0,.35);
+  box-shadow:
+    0 4px 20px rgba(0,0,0,.4),
+    0 0 0 1px rgba(255,255,255,.05),
+    inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+/* ── PVP ── */
+.pvp-info-bar, .pvp-section {
+  border: none;
+  box-shadow:
+    0 4px 16px rgba(0,0,0,.4),
+    0 0 0 1px rgba(255,255,255,.05),
+    inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter: blur(8px);
+}
+.pvp-section { background: rgba(0,0,0,.3); }
+
+/* ── 탭 페이드인 — 더 부드럽게 ── */
+@keyframes tabFadeIn {
+  from { opacity:0; transform:translateY(10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.tab-page.active { animation: tabFadeIn .3s cubic-bezier(.4,0,.2,1); }
+
+/* ── 결과 오버레이 ── */
+.result-overlay {
+  background: rgba(0,0,0,.82);
+  backdrop-filter: blur(16px) saturate(1.3);
+}
+
+/* ── 공중 토큰 애니메이션 ── */
+.flying-token {
+  transition: all .6s cubic-bezier(.22,.68,0,1.4) !important;
+  filter: drop-shadow(0 4px 16px rgba(241,196,15,.4));
+}
+
+/* ── 범용 글래스 패널 ── */
+.glass-panel {
+  background: rgba(255,255,255,.04);
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    0 0 0 1px rgba(255,255,255,.06),
+    inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(12px);
+  border-radius: 18px;
+}
+
+/* ── 네비 하단 글로우 ── */
+.main-nav {
+  box-shadow:
+    0 1px 0 rgba(241,196,15,.1),
+    0 4px 30px rgba(0,0,0,.8);
+}
+
+/* ── 랭킹 테이블 ── */
+.ranking-modal {
+  border: none;
+  box-shadow:
+    0 24px 80px rgba(0,0,0,.8),
+    0 0 0 1px rgba(241,196,15,.1),
+    inset 0 1px 0 rgba(255,255,255,.05);
+  backdrop-filter: blur(20px);
+}
+
+/* ── 설명서 ── */
+.game-help-box {
+  border: none;
+  box-shadow:
+    0 24px 80px rgba(0,0,0,.8),
+    0 0 0 1px rgba(241,196,15,.12),
+    inset 0 1px 0 rgba(255,255,255,.05);
+  backdrop-filter: blur(20px);
+  background: rgba(5,12,7,.92);
+}
+
+/* ── 계정 메뉴 ── */
+#accountMenu {
+  border: none !important;
+  box-shadow:
+    0 16px 48px rgba(0,0,0,.7),
+    0 0 0 1px rgba(255,255,255,.07),
+    inset 0 1px 0 rgba(255,255,255,.06) !important;
+  backdrop-filter: blur(16px) !important;
+  background: rgba(8,16,10,.92) !important;
+}
+
+/* ── 스피닝 주사위 — 떨림 ── */
+.slot-cell.spinning { animation: cellWobble .1s ease infinite alternate; }
+@keyframes cellWobble {
+  from { transform: scale(.95) rotate(-.5deg); }
+  to   { transform: scale(1.05) rotate(.5deg); }
+}
+
+/* ── 모바일 touch ── */
+@media (hover:none) {
+  .card:hover { transform:none; }
+  .chip-stack:hover { transform:none;filter:none; }
+  .horse-card:hover { transform:none;box-shadow:0 2px 8px rgba(0,0,0,.3); }
+}
+
+/* ── 반응형 ── */
+@media (max-width:640px) {
+  .yacht-score-grid { grid-template-columns:1fr; }
+  .pvp-game { padding:.45rem; }
+}
