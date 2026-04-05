@@ -15,7 +15,7 @@ let sessionNickname=null,sessionToken=null;
 // ── Tab music map ────────────────────────────
 const TAB_MUSIC={
   poker:'bgMusic',roulette:'bgMusicRoulette',slot:'bgMusicSlot',
-  pvp:'bgMusicPvp',toto:'bgMusicToto',dice:'bgMusicDice'
+  pvp:'bgMusicPvp',toto:'bgMusicToto',dice:'bgMusicDice',yacht:'bgMusicDice'
 };
 
 // ── Network ──────────────────────────────────
@@ -75,7 +75,7 @@ const TAB_GROUPS = {
   community: ['community'],
   admin: ['admin'],
 };
-const PLAY_TABS = ['poker','roulette','slot','pvp','toto','dice'];
+const PLAY_TABS = ['poker','roulette','slot','pvp','toto','dice','yacht'];
 
 function switchTabGroup(group) {
   document.querySelectorAll('.nav-group-btn').forEach(el=>el.classList.toggle('active',el.dataset.group===group));
@@ -119,6 +119,7 @@ function switchTab(name){
   if(name==='slot'){updateSlotChipsDisplay();if(typeof renderSlotChipStacks==='function')renderSlotChipStacks();}
   if(name==='toto')renderHorseTab();
   if(name==='dice')renderDiceUI();
+  if(name==='yacht')renderYachtUI();
 }
 
 function switchTotoSub(sub, btn) {
@@ -659,4 +660,102 @@ function doLogout() {
   updateChipsDisplay(); updateBetDisplay(); updateStatsDisplay();
   document.getElementById('authModal').classList.add('show');
   setTimeout(() => document.getElementById('authNick')?.focus(), 100);
+}
+
+// ── 게임 설명서 ──────────────────────────────
+const GAME_HELP = {
+  poker: {
+    title: '🃏 5카드 드로우 포커',
+    sections: [
+      { h: '기본 규칙', p: '5장의 카드를 받고, 원하는 카드를 선택해 교환합니다. 최종 5장의 패 조합에 따라 배당을 받습니다.' },
+      { h: '진행 순서', ul: ['① 칩을 베팅존에 던져 베팅', '② 딜 버튼 → 카드 5장 수령', '③ 교환할 카드 선택 (클릭)', '④ 드로우 버튼 → 선택한 카드 교환', '⑤ 패 비교 후 배당 지급'] },
+      { h: '배당표', table: [['패','배당'],['원페어','×2'],['투페어','×4'],['트리플','×6'],['스트레이트','×12'],['플러시','×18'],['풀하우스','×30'],['포카드','×60'],['스트레이트 플러시','×300'],['로얄 스트레이트 플러시','×1200']] },
+      { h: '더블업', p: '이겼을 때 더블업 버튼으로 배당을 2배로 노릴 수 있습니다. 다음 카드가 현재 카드 이상이면 성공!' },
+    ]
+  },
+  slot: {
+    title: '🎰 슬롯머신',
+    sections: [
+      { h: '기본 규칙', p: '5×3 그리드에서 같은 심볼이 가로로 3개 이상 연속되면 당첨! 베팅 후 스핀 버튼을 누르세요. 베팅은 스핀 후에도 유지됩니다.' },
+      { h: '슬롯 추가', p: '💰 버튼으로 슬롯을 최대 4대까지 추가할 수 있습니다. 베팅액은 대수로 나눠 배분됩니다.' },
+      { h: '배당표', table: [['심볼','×3','×4','×5'],['🍒',2,7,20],['🍋',3,12,35],['🍇',5,20,60],['🔔',8,33,100],['⭐',13,55,170],['💎',25,110,340],['7️⃣',50,220,700]] },
+      { h: '팁', p: '슬롯을 여러 대 운영하면 베팅액이 분산되어 리스크를 낮출 수 있습니다.' }
+    ]
+  },
+  dice: {
+    title: '🎲 주사위',
+    sections: [
+      { h: '기본 규칙', p: '주사위 하나를 굴려 베팅한 결과가 맞으면 당첨됩니다.' },
+      { h: '베팅 종류', table: [['종류','설명','배당'],['홀짝','홀수/짝수 선택','×2 (EV ~1.0)'],['숫자 맞추기','1~6 중 선택','×7 (EV ~1.17)']] },
+      { h: '팁', p: '숫자 맞추기가 배당은 높지만 확률은 1/6 입니다. 홀짝은 확률은 높지만 배당이 낮습니다.' }
+    ]
+  },
+  yacht: {
+    title: '🎳 요트 주사위',
+    sections: [
+      { h: '기본 규칙', p: '5개의 주사위를 최대 3번 굴립니다. 매 턴마다 12가지 카테고리 중 하나에 점수를 기록합니다. 12번 후 총점으로 배당을 받습니다.' },
+      { h: '굴리기', ul: ['주사위를 굴린 뒤 고정할 주사위 클릭', '고정된 주사위는 다음 굴리기에서 제외', '최대 3번 굴린 후 카테고리 선택 필수'] },
+      { h: '카테고리', table: [['카테고리','조건','점수'],['에이스~식스','해당 숫자의 합','합계'],['초이스','제한 없음','5개 합계'],['4오브어카인드','같은 눈 4개 이상','5개 합계'],['풀하우스','3+2 조합','25점'],['스몰 스트레이트','4연속 숫자','30점'],['라지 스트레이트','5연속 숫자','40점'],['요트!','5개 모두 동일','50점']] },
+      { h: '보너스', p: '에이스~식스 합계가 63점 이상이면 +35점 보너스!' },
+      { h: '배당 기준', p: '총점 100점당 ×1 배당 (최대 ×3). 예: 200점 → ×2, 300점 이상 → ×3' }
+    ]
+  },
+  toto: {
+    title: '🏇 토토',
+    sections: [
+      { h: '경마', p: '상시 레이스가 진행됩니다. 30초 베팅 후 레이스 시작. 말을 클릭해 선택하고 베팅하세요.' },
+      { h: '경마 베팅', table: [['종류','설명','EV'],['1등 맞추기','1위 말 선택','1.20~1.35'],['1·2·3등 순서','순서까지 맞추기','높은 배당']] },
+      { h: 'KBO 야구', p: '당일 KBO 경기에 베팅합니다. 승리팀을 맞추면 이긴 팀에 베팅한 사람들이 진 팀의 베팅 풀을 나눠 갖습니다.' },
+      { h: '야구 배당', p: '승자 배당 = 원금 + 패자 풀 × (내 베팅/승자 총베팅). 많은 사람이 같은 팀을 고를수록 배당이 낮아집니다.' }
+    ]
+  },
+  pvp: {
+    title: '⚔️ 세븐포커',
+    sections: [
+      { h: '기본 규칙', p: '1:1 세븐 포커입니다. 매칭 후 앤티를 내고 카드를 받습니다.' },
+      { h: '진행 순서', ul: ['① 매칭 후 앤티 자동 지급', '② 카드 4장 수령 → 1장 버리기', '③ 공개/비공개 카드 추가로 받기', '④ 1차~3차 베팅 (체크/콜/하프/풀/다이)', '⑤ 패 공개 → 높은 패 승리'] },
+      { h: '베팅 옵션', table: [['버튼','설명'],['체크','추가 베팅 없이 넘기기'],['콜','상대 베팅 따라가기'],['하프','팟의 절반 레이즈'],['풀','팟 전액 레이즈'],['다이','포기 (이번 판 팟 상대에게)']] }
+    ]
+  },
+  roulette: {
+    title: '🎡 룰렛',
+    sections: [
+      { h: '기본 규칙', p: '참가 버튼을 누르고 배팅 칸을 클릭해 베팅하세요. 룰렛이 돌아 공이 멈추는 숫자에 따라 배당을 받습니다.' },
+      { h: '배팅 종류', ul: ['단일 숫자: ×36', '2개 스플릿: ×18', '색상(빨/검): ×2', '홀짝: ×2', '1-18/19-36: ×2', '더즌(1~12 등): ×3', '열(column): ×3'] },
+      { h: '진행', p: '베팅 확정 후 스핀 버튼. 참여자 과반이 스킵 투표하면 즉시 스핀합니다.' }
+    ]
+  },
+};
+
+function showGameHelp(game) {
+  const help = GAME_HELP[game];
+  if (!help) return;
+  const existing = document.getElementById('gameHelpOverlay');
+  if (existing) { existing.remove(); return; }
+  const overlay = document.createElement('div');
+  overlay.id = 'gameHelpOverlay';
+  overlay.className = 'game-help-overlay';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  const sectionsHTML = help.sections.map(s => {
+    let content = '';
+    if (s.p) content = `<p>${s.p}</p>`;
+    if (s.ul) content = `<ul>${s.ul.map(i=>`<li>${i}</li>`).join('')}</ul>`;
+    if (s.table) {
+      const [head, ...rows] = s.table;
+      content = `<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
+        ${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}
+      </tbody></table>`;
+    }
+    return `<h3>${s.h}</h3>${content}`;
+  }).join('');
+
+  overlay.innerHTML = `<div class="game-help-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h2>${help.title}</h2>
+      <button onclick="document.getElementById('gameHelpOverlay').remove()" style="background:none;border:none;color:#888;cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+    </div>
+    ${sectionsHTML}
+  </div>`;
+  document.body.appendChild(overlay);
 }

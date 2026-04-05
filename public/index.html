@@ -34,6 +34,7 @@
     <button class="nav-sub-btn" data-tab="pvp" onclick="switchTab('pvp')">⚔️ 멀티</button>
     <button class="nav-sub-btn" data-tab="toto" onclick="switchTab('toto')">🏇 토토</button>
     <button class="nav-sub-btn" data-tab="dice" onclick="switchTab('dice')">🎲 주사위</button>
+    <button class="nav-sub-btn" data-tab="yacht" onclick="switchTab('yacht')">🎳 요트</button>
   </div>
 </nav>
 
@@ -49,7 +50,7 @@
 
 <!-- POKER -->
 <div class="tab-page active" id="tabPoker">
-  <div class="main-area">
+  <div class="main-area" style="position:relative"><button class="game-help-btn" onclick="showGameHelp('poker')" title="설명서">?</button>
     <div class="cards-area" id="cardsArea"></div>
     <div class="betting-zone" id="bettingZone">
       <div class="betting-zone-label">베팅 영역</div>
@@ -129,8 +130,13 @@
     <div class="slot-my-chips">💰 <span id="slotMyChips">0</span></div>
     <div style="color:#333;font-size:.7rem;margin-left:auto">병렬 5x3 슬롯 (최대 4대)</div>
   </div>
-  <div class="slot-machines-area" id="slotMachinesArea">
+  <div style="position:relative;padding-top:.1rem"><button class="game-help-btn" onclick="showGameHelp('slot')" title="설명서">?</button></div><div class="slot-machines-area" id="slotMachinesArea">
   </div>
+</div>
+
+<!-- YACHT -->
+<div class="tab-page" id="tabYacht">
+  <div class="toto-wrap" style="position:relative"><button class="game-help-btn" onclick="showGameHelp('yacht')" title="설명서">?</button><div id="yachtContent"></div></div>
 </div>
 
 <!-- PVP -->
@@ -180,7 +186,7 @@
 
 <!-- DICE -->
 <div class="tab-page" id="tabDice">
-  <div class="toto-wrap"><div id="diceContent"></div></div>
+  <div class="toto-wrap" style="position:relative"><button class="game-help-btn" onclick="showGameHelp('dice')" title="설명서">?</button><div id="diceContent"></div></div>
 </div>
 
 <!-- COMMUNITY (랭킹+DM을 탭으로) -->
@@ -326,6 +332,7 @@
 <script src="./js/dm.js"></script>
 <script src="./js/toto.js"></script>
 <script src="./js/dice.js"></script>
+<script src="./js/yacht.js"></script>
 <script src="./js/admin.js"></script>
 <script>
 // Prevent context menu on game elements (stops long-press text selection on mobile)

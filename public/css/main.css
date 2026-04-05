@@ -1028,3 +1028,341 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .acct-menu-item.danger{color:#e74c3c}
 .acct-menu-item.danger:hover{background:rgba(231,76,60,.12)}
 .acct-menu-sep{height:1px;background:rgba(255,255,255,.08);margin:.2rem 0}
+
+/* ════════════════════════════════════════════
+   UI 전면 개선 — 2025
+   ════════════════════════════════════════════ */
+
+/* Google Fonts 임포트 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&display=swap');
+
+/* 전역 폰트 & 변수 */
+:root {
+  --gold: #f1c40f;
+  --gold-dim: rgba(241,196,15,.18);
+  --green: #2ecc71;
+  --red: #e74c3c;
+  --blue: #3498db;
+  --bg-deep: #030706;
+  --bg-card: rgba(255,255,255,.04);
+  --border: rgba(255,255,255,.08);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow: 0 8px 32px rgba(0,0,0,.6);
+}
+body { font-family: 'Noto Sans KR', sans-serif; }
+
+/* ── Navbar 개선 ── */
+.main-nav {
+  background: rgba(3,7,6,.97);
+  box-shadow: 0 1px 0 rgba(241,196,15,.12), 0 4px 20px rgba(0,0,0,.7);
+}
+.nav-row-top { height:54px; padding:0 .8rem; }
+.nav-brand {
+  font-size:1.1rem;letter-spacing:.06em;font-weight:900;
+  background:linear-gradient(135deg,#f1c40f,#e67e22);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  text-shadow:none;
+}
+.nav-group-btn {
+  font-size:.75rem;font-weight:700;letter-spacing:.04em;padding:.3rem .7rem;
+  border-radius:20px;
+}
+.nav-group-btn.active {
+  background:linear-gradient(135deg,rgba(241,196,15,.2),rgba(230,126,34,.1));
+  box-shadow:0 0 12px rgba(241,196,15,.15);
+}
+.nav-group-btn.active::after { left:20%;right:20%; }
+
+.nav-row-sub {
+  height:38px;background:rgba(0,0,0,.4);
+  border-top:1px solid rgba(255,255,255,.05);
+}
+.nav-sub-btn {
+  font-size:.75rem;font-weight:600;padding:.28rem .72rem;letter-spacing:.03em;
+}
+.nav-sub-btn.active {
+  color:var(--gold);border-bottom-color:var(--gold);
+  text-shadow:0 0 8px rgba(241,196,15,.4);
+}
+.nav-icon-btn {
+  width:38px;height:38px;border-radius:10px;
+  background:rgba(255,255,255,.05);border:1px solid var(--border);
+}
+.nav-icon-btn:hover { border-color:rgba(241,196,15,.4);background:rgba(241,196,15,.1); }
+.nav-nick-btn {
+  background:rgba(241,196,15,.08);border:1px solid rgba(241,196,15,.25);
+  border-radius:10px;padding:.28rem .75rem;font-size:.75rem;
+  max-width:110px;
+}
+
+/* ── 탭 페이지 위치 ── */
+.tab-page { top:92px; }
+
+/* ── 포커 탭 개선 ── */
+#tabPoker {
+  background: radial-gradient(ellipse at 50% 0%, #143828 0%, #030d07 70%);
+}
+.main-area { padding:.6rem .8rem; }
+.cards-area { gap:.6rem;min-height:160px; }
+.card { width:90px;height:126px;border-radius:10px; }
+.card:hover { transform:translateY(-10px) rotate(1deg); }
+.card.selected { transform:translateY(-20px);box-shadow:0 10px 28px rgba(241,196,15,.5); }
+
+.betting-zone {
+  background:radial-gradient(circle,rgba(46,204,113,.15) 0%,transparent 65%);
+  border:2px dashed rgba(46,204,113,.4);border-radius:16px;
+  margin:.4rem 1rem;min-height:100px;
+}
+.player-chips-area {
+  background:rgba(0,0,0,.55);border-top:2px solid rgba(241,196,15,.3);
+  padding:.65rem .75rem;gap:.5rem;
+  box-shadow:0 -4px 20px rgba(0,0,0,.4);
+}
+.chips-label { font-size:.9rem;font-weight:700;letter-spacing:.02em; }
+
+/* ── 버튼 개선 ── */
+.btn-primary {
+  background:linear-gradient(135deg,#f1c40f,#e67e22);
+  letter-spacing:.03em;font-size:.9rem;
+  box-shadow:0 4px 14px rgba(241,196,15,.25);
+}
+.btn-primary:hover { box-shadow:0 6px 22px rgba(241,196,15,.4);transform:translateY(-2px) scale(1.04); }
+.action-button {
+  letter-spacing:.02em;box-shadow:0 3px 10px rgba(0,0,0,.4);
+  border-radius:10px;
+}
+.action-button:hover:not(:disabled) { transform:translateY(-3px) scale(1.05); }
+.deal-button { box-shadow:0 4px 14px rgba(46,204,113,.2); }
+.draw-button { box-shadow:0 4px 14px rgba(52,152,219,.2); }
+
+/* ── 결과 오버레이 개선 ── */
+.result-title { font-size:2.8rem;letter-spacing:.04em; }
+.result-title.win { text-shadow:0 0 40px rgba(46,204,113,.6),0 0 80px rgba(46,204,113,.3); }
+.result-title.lose { text-shadow:0 0 40px rgba(231,76,60,.5),0 0 80px rgba(231,76,60,.25); }
+.result-amount { font-size:2rem;letter-spacing:.02em; }
+
+/* ── 슬롯 탭 개선 ── */
+#tabSlot { background:radial-gradient(ellipse at 50% 10%,#0b0d1a 0%,#020309 70%); }
+.slot-machine {
+  background:rgba(8,10,24,.8);
+  border:1.5px solid rgba(100,110,220,.2);border-radius:16px;
+  box-shadow:0 4px 20px rgba(0,0,80,.3);
+}
+.slot-machine-name { color:#a0a8ff;font-size:.85rem; }
+.slot-grid {
+  border:1.5px solid rgba(100,110,220,.2);
+  background:rgba(0,0,0,.6);border-radius:10px;
+}
+.slot-cell {
+  border:1px solid rgba(100,110,220,.12);border-radius:8px;
+  height:54px;font-size:1.7rem;
+  background:rgba(0,0,40,.4);
+}
+.slot-cell.win3 { background:rgba(46,204,113,.2);border-color:var(--green);box-shadow:0 0 10px rgba(46,204,113,.4); }
+.slot-cell.win4 { background:rgba(52,152,219,.2);border-color:var(--blue);box-shadow:0 0 12px rgba(52,152,219,.5); }
+.slot-cell.win5 { background:rgba(241,196,15,.2);border-color:var(--gold);box-shadow:0 0 16px rgba(241,196,15,.6); }
+.slot-paytable-mini { font-size:.63rem;background:rgba(0,0,40,.5);border-radius:8px; }
+
+/* ── 토토 탭 개선 ── */
+#tabToto { background:radial-gradient(ellipse at 50% 0%,#151006,#030201 70%); }
+.horse-card {
+  background:rgba(255,255,255,.04);border:1.5px solid var(--border);
+  border-radius:12px;padding:.55rem .5rem;cursor:pointer;
+  transition:all .2s cubic-bezier(.34,1.56,.64,1);
+}
+.horse-card:hover { transform:translateY(-3px);border-color:rgba(241,196,15,.4); }
+.horse-card.selected {
+  background:rgba(241,196,15,.12);border-color:var(--gold);
+  transform:translateY(-4px);box-shadow:0 6px 18px rgba(241,196,15,.25);
+}
+.horse-name { font-weight:700;font-size:.88rem; }
+.horse-payout { font-size:.72rem;color:#888;margin-top:.15rem; }
+.baseball-card {
+  background:rgba(255,255,255,.04);border:1.5px solid var(--border);
+  border-radius:14px;padding:.8rem 1rem;
+  transition:border-color .2s;
+}
+
+/* ── 주사위 탭 개선 ── */
+#tabDice { background:radial-gradient(ellipse at 50% 0%,#0f0a1a,#030105 70%); }
+.dice-panel {
+  background:rgba(255,255,255,.04);border:1.5px solid var(--border);
+  border-radius:var(--radius);padding:1.2rem;
+  display:flex;flex-direction:column;gap:.8rem;
+}
+.dice-face {
+  font-size:5rem;text-align:center;
+  filter:drop-shadow(0 4px 16px rgba(241,196,15,.3));
+  transition:transform .15s;
+}
+.dice-num-btn {
+  width:42px;height:42px;border-radius:10px;font-size:1.1rem;font-weight:700;
+  background:rgba(255,255,255,.07);border:1.5px solid var(--border);
+  color:#aaa;cursor:pointer;transition:all .2s;
+}
+.dice-num-btn:hover { background:rgba(241,196,15,.15);border-color:rgba(241,196,15,.4);color:var(--gold); }
+.dice-num-btn.active { background:rgba(241,196,15,.22);border-color:var(--gold);color:var(--gold);transform:scale(1.1); }
+.dice-result { text-align:center;font-size:.95rem;font-weight:700;min-height:1.4rem;letter-spacing:.02em; }
+@keyframes diceBounce { 0%{transform:scale(1.5) rotate(-10deg)} 50%{transform:scale(.9) rotate(5deg)} 100%{transform:scale(1)} }
+
+/* ── PVP 탭 개선 ── */
+#tabPvp { background:radial-gradient(ellipse at 50% 10%,#0a1f0f,#020805 70%); }
+.pvp-info-bar {
+  background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.07);
+  border-radius:12px;backdrop-filter:blur(8px);
+}
+.pvp-section { background:rgba(0,0,0,.35);border:1px solid var(--border);border-radius:12px; }
+.pvp-btn { border-radius:10px;letter-spacing:.02em; }
+.pvp-btn.primary { box-shadow:0 4px 12px rgba(46,204,113,.2); }
+.pvp-btn.raise { box-shadow:0 4px 12px rgba(52,152,219,.2); }
+
+/* ── 커뮤니티/관리 탭 ── */
+#tabCommunity { background:radial-gradient(ellipse at 50% 0%,#0a100a,#020502 70%); }
+#tabAdmin { background:radial-gradient(ellipse at 50% 0%,#0f0a06,#050200 70%); }
+.ranking-table td { font-size:.84rem; }
+.ranking-table tr:hover td { background:rgba(241,196,15,.04); }
+.me-row td { color:var(--gold)!important; }
+
+/* ── 모달 개선 ── */
+.modal-overlay { backdrop-filter:blur(6px); }
+.modal-box, .ranking-modal, .dm-panel {
+  box-shadow:var(--shadow);
+}
+.modal-input:focus { box-shadow:0 0 0 2px rgba(241,196,15,.25); }
+
+/* ── 기타 탭 ── */
+#tabOther { background:radial-gradient(ellipse at 50% 0%,#0a0f0a,#020502 70%); }
+.other-section { border-radius:var(--radius); }
+
+/* ── 공통 카드 스타일 ── */
+.toto-sub-btn {
+  letter-spacing:.03em;font-size:.78rem;
+  border-radius:20px;
+}
+.toto-sub-btn.active { box-shadow:0 0 10px rgba(241,196,15,.15); }
+.toto-loading, .toto-empty, .toto-err {
+  text-align:center;padding:2rem 1rem;
+  color:#555;font-size:.88rem;
+}
+.toto-err { color:#e74c3c; }
+
+/* ── 요트 게임 ── */
+#tabYacht { background:radial-gradient(ellipse at 50% 0%,#0a0e1a,#020408 70%); }
+.yacht-panel { display:flex;flex-direction:column;gap:.8rem; }
+.yacht-header {
+  display:flex;gap:.4rem;
+  background:rgba(0,0,0,.45);border:1px solid var(--border);border-radius:12px;
+  padding:.65rem .75rem;
+}
+.yacht-stat { flex:1;text-align:center;display:flex;flex-direction:column;gap:.1rem; }
+.yacht-stat-val { font-size:1.15rem;font-weight:900;color:var(--gold); }
+.yacht-stat-lbl { font-size:.62rem;color:#666; }
+.yacht-dice-area {
+  background:rgba(0,0,0,.42);border:1px solid var(--border);
+  border-radius:12px;padding:.75rem;
+}
+.yacht-dice-row { display:flex;gap:.5rem;justify-content:center;margin-bottom:.7rem; }
+.yacht-die {
+  width:58px;height:58px;border-radius:12px;
+  background:rgba(255,255,255,.07);border:2px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .2s cubic-bezier(.34,1.56,.64,1);
+  user-select:none;position:relative;
+}
+.yacht-die:hover:not(.unrolled) { transform:translateY(-3px);border-color:rgba(241,196,15,.4); }
+.yacht-die.held {
+  background:rgba(241,196,15,.15);border-color:var(--gold);
+  transform:translateY(-6px);box-shadow:0 6px 18px rgba(241,196,15,.3);
+}
+.yacht-die.unrolled { cursor:default;opacity:.5; }
+.yacht-die-face { font-size:2rem;line-height:1; }
+.yacht-held-tag { font-size:.5rem;color:var(--gold);font-weight:700;margin-top:.15rem; }
+.yacht-roll-row { display:flex;gap:.4rem;align-items:center;justify-content:center; }
+.yacht-roll-btn {
+  background:linear-gradient(135deg,#3498db,#2980b9);color:white;
+  border:none;border-radius:10px;padding:.5rem 1.2rem;font-weight:700;
+  cursor:pointer;font-size:.88rem;transition:all .2s cubic-bezier(.34,1.56,.64,1);
+  flex:1;max-width:260px;
+}
+.yacht-roll-btn:hover:not(:disabled) { transform:translateY(-2px);box-shadow:0 6px 18px rgba(52,152,219,.3); }
+.yacht-roll-btn.disabled, .yacht-roll-btn:disabled { background:rgba(255,255,255,.07);color:#555;cursor:not-allowed; }
+.yacht-reset-btn {
+  background:rgba(255,255,255,.07);border:1px solid var(--border);color:#777;
+  border-radius:10px;padding:.5rem .75rem;cursor:pointer;font-size:.8rem;
+  transition:all .2s;
+}
+.yacht-reset-btn:hover { background:rgba(255,255,255,.12);color:#aaa; }
+.yacht-scores { background:rgba(0,0,0,.42);border:1px solid var(--border);border-radius:12px;padding:.6rem; }
+.yacht-score-header { font-size:.72rem;color:#666;margin-bottom:.4rem;font-weight:600; }
+.yacht-score-grid { display:grid;grid-template-columns:1fr 1fr;gap:.25rem; }
+.yacht-score-row {
+  display:flex;align-items:center;gap:.3rem;
+  padding:.38rem .5rem;border-radius:8px;border:1px solid transparent;
+  transition:all .15s;cursor:default;
+}
+.yacht-score-row.selectable {
+  cursor:pointer;border-color:rgba(52,152,219,.3);background:rgba(52,152,219,.06);
+}
+.yacht-score-row.selectable:hover { background:rgba(52,152,219,.14);border-color:var(--blue); }
+.yacht-score-row.scored { background:rgba(46,204,113,.06);border-color:rgba(46,204,113,.15); }
+.yacht-cat-label { font-size:.72rem;font-weight:700;color:#ccc;flex:1; }
+.yacht-cat-desc { font-size:.58rem;color:#555;display:none; }
+.yacht-cat-score { font-size:.88rem;font-weight:900;color:#555;min-width:28px;text-align:right; }
+.yacht-score-row.scored .yacht-cat-score { color:var(--green); }
+.yacht-score-row.selectable .yacht-cat-score.preview { color:var(--blue); }
+.yacht-bet-area {
+  background:rgba(0,0,0,.42);border:1px solid var(--border);border-radius:12px;
+  padding:.75rem;display:flex;flex-direction:column;gap:.5rem;
+}
+.yacht-result {
+  background:rgba(0,0,0,.42);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.2rem;display:flex;flex-direction:column;align-items:center;gap:.6rem;
+}
+.yacht-result-title { font-size:1.8rem;font-weight:900;animation:winPop .6s cubic-bezier(.34,1.56,.64,1); }
+.yacht-result-score { font-size:2.4rem;font-weight:900;color:var(--gold); }
+.yacht-result-bonus { font-size:.78rem;color:var(--green);font-weight:700; }
+.yacht-result-detail { font-size:.85rem;color:#888; }
+.yacht-result-scores { width:100%;display:grid;grid-template-columns:1fr 1fr;gap:.2rem;max-height:200px;overflow-y:auto;font-size:.72rem; }
+.yacht-res-row { display:flex;justify-content:space-between;padding:.2rem .4rem;border-radius:5px; }
+.yacht-res-row:nth-child(odd) { background:rgba(255,255,255,.03); }
+.yacht-res-row.bonus { color:var(--green);font-weight:700; }
+.yacht-res-row.total { color:var(--gold);font-weight:900;border-top:1px solid var(--border);margin-top:.3rem;padding-top:.3rem; }
+@keyframes yachtRoll { 0%{transform:rotate(-15deg) scale(1.15)} 50%{transform:rotate(10deg) scale(.9)} 100%{transform:rotate(0) scale(1)} }
+
+/* ── 설명서 버튼/패널 ── */
+.game-help-btn {
+  position:absolute;top:.6rem;right:.6rem;
+  background:rgba(255,255,255,.07);border:1px solid var(--border);
+  color:#777;border-radius:50%;width:28px;height:28px;
+  font-size:.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;z-index:10;
+}
+.game-help-btn:hover { background:rgba(255,255,255,.14);color:white; }
+.game-help-overlay {
+  position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;z-index:6000;
+  animation:fadeInOv .2s ease;
+}
+.game-help-box {
+  background:linear-gradient(145deg,#0d1a10,#050e08);
+  border:2px solid rgba(241,196,15,.35);border-radius:20px;
+  padding:1.5rem;max-width:480px;width:92%;max-height:82vh;overflow-y:auto;
+  color:white;animation:modalSlideUp .25s ease;
+}
+.game-help-box h2 { color:var(--gold);font-size:1.2rem;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem; }
+.game-help-box h3 { color:var(--green);font-size:.9rem;margin:.8rem 0 .3rem;font-weight:700; }
+.game-help-box p { color:#bbb;font-size:.82rem;line-height:1.65; }
+.game-help-box ul { list-style:none;display:flex;flex-direction:column;gap:.2rem; }
+.game-help-box ul li { color:#bbb;font-size:.82rem;padding-left:1rem;position:relative; }
+.game-help-box ul li::before { content:'▸';position:absolute;left:0;color:var(--gold); }
+.game-help-box table { width:100%;border-collapse:collapse;font-size:.78rem;margin-top:.3rem; }
+.game-help-box th { color:var(--gold);border-bottom:1px solid rgba(241,196,15,.2);padding:.3rem .4rem;text-align:left; }
+.game-help-box td { padding:.28rem .4rem;border-bottom:1px solid var(--border);color:#bbb; }
+.game-help-box tr:hover td { background:rgba(255,255,255,.03); }
+
+/* ── 스크롤바 ── */
+::-webkit-scrollbar { width:5px;height:5px; }
+::-webkit-scrollbar-track { background:rgba(255,255,255,.03); }
+::-webkit-scrollbar-thumb { background:rgba(241,196,15,.2);border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:rgba(241,196,15,.4); }
