@@ -1784,3 +1784,266 @@ body {
   .yacht-score-grid { grid-template-columns:1fr; }
   .pvp-game { padding:.45rem; }
 }
+
+/* ════════════════════════════════════════════
+   모바일 완전 지원 — 재정비
+   ════════════════════════════════════════════ */
+
+/* viewport height 보정 (iOS 주소창) */
+:root {
+  --vh: 1vh;
+  --nav-h: 92px; /* 2층 navbar 높이 */
+}
+.tab-page {
+  top: var(--nav-h);
+  height: calc(var(--vh, 1vh) * 100 - var(--nav-h));
+  /* overflow는 탭별로 */
+}
+#tabPoker, #tabSlot, #tabPvp, #tabDice, #tabYacht { overflow: hidden; }
+#tabRoulette, #tabToto, #tabCommunity, #tabAdmin, #tabOther { overflow-y: auto; }
+
+/* ────────────────────────────────────────────
+   S: ≤480px (대부분의 폰)
+   ─────────────────────────────────────────── */
+@media (max-width: 480px) {
+
+  /* 네비 */
+  .nav-row-top { height: 48px; padding: 0 .5rem; }
+  .nav-brand { font-size: 1rem; }
+  .nav-group-btn { font-size: .72rem; padding: .28rem .52rem; }
+  .nav-group-btn::after { display: none; } /* 언더라인 생략 */
+  .nav-row-sub { height: 36px; }
+  .nav-sub-btn { font-size: .7rem; padding: .22rem .5rem; }
+  .nav-icon-btn { width: 34px; height: 34px; font-size: .85rem; }
+  .nav-nick-btn { font-size: .7rem; padding: .22rem .55rem; max-width: 80px; }
+  :root { --nav-h: 84px; }
+
+  /* ── 포커 ── */
+  .main-area {
+    padding: .3rem .4rem;
+    gap: .2rem;
+    justify-content: flex-start;
+  }
+  .cards-area { min-height: 100px; gap: .25rem; }
+  .card { width: 52px; height: 73px; border-radius: 8px; }
+  .card.selected { transform: translateY(-14px); }
+  .card:hover { transform: none; }
+
+  .betting-zone {
+    min-height: 72px;
+    margin: .15rem .3rem;
+  }
+  .betting-zone-label { font-size: .8rem; }
+  .bet-amount { font-size: 1.1rem; }
+
+  .player-chips-area {
+    padding: .4rem .45rem;
+    gap: .3rem;
+  }
+  .chips-label { font-size: .78rem; }
+  .chip-svg { width: 42px; height: 42px; }
+  .chip-count { width: 17px; height: 17px; font-size: .55rem; top: -5px; right: -5px; }
+
+  .action-buttons { gap: .25rem; flex-wrap: nowrap; }
+  .action-button {
+    padding: .42rem .6rem;
+    font-size: .78rem;
+    border-radius: 10px;
+    min-height: 40px;
+  }
+
+  .paytable, .stats-panel { display: none; }
+  .result-title { font-size: 2rem; }
+  .result-amount { font-size: 1.35rem; }
+
+  /* ── 슬롯 ── */
+  .slot-machine { min-width: 100%; flex: 1 1 100%; }
+  .slot-cell { height: 38px; font-size: 1.2rem; }
+  .slot-spin-btn { font-size: .88rem; padding: .42rem .85rem; }
+  .slot-shared-ctrl { padding: .5rem .65rem; }
+  .slot-paytable-mini { font-size: .55rem; }
+
+  /* ── 주사위 ── */
+  .dice-panel { padding: .75rem; gap: .65rem; }
+  .dice-face { font-size: 4rem; }
+  .dice-num-btn { width: 44px; height: 44px; font-size: 1rem; border-radius: 10px; }
+  .dice-bet-types { gap: .3rem; }
+
+  /* ── 요트 ── */
+  .yacht-dice-row { gap: .35rem; }
+  .yacht-die { width: 52px; height: 52px; border-radius: 10px; }
+  .yacht-die-face { font-size: 1.8rem; }
+  .yacht-score-grid { grid-template-columns: 1fr; gap: .2rem; }
+  .yacht-stat-val { font-size: 1rem; }
+  .yacht-roll-btn { font-size: .82rem; padding: .45rem 1rem; }
+
+  /* ── 토토 ── */
+  .toto-sub-btn { font-size: .74rem; padding: .32rem .6rem; }
+  .horse-grid { grid-template-columns: repeat(3, 1fr); gap: .3rem; }
+  .horse-card { padding: .45rem .3rem; }
+  .horse-name { font-size: .8rem; }
+  .horse-num { font-size: .68rem; }
+  .horse-payout { font-size: .65rem; }
+  .horse-num-btn { font-size: .7rem; padding: .25rem .5rem; }
+  .baseball-teams { gap: .25rem; }
+  .bb-home, .bb-away { font-size: .95rem; min-width: 45px; }
+  .bb-pick-btn { font-size: .78rem; padding: .38rem .2rem; }
+
+  /* ── PVP ── */
+  .pvp-game { padding: .4rem; gap: .45rem; }
+  .pvp-info-bar { padding: .45rem .55rem; }
+  .pvp-nick { font-size: .78rem; }
+  .pvp-chips { font-size: .68rem; }
+  .pvp-pot { font-size: .9rem; }
+  .pvp-btn-row { gap: .25rem; }
+  .pvp-btn { font-size: .76rem; padding: .38rem .65rem; }
+  .pvp-section { padding: .4rem .5rem; }
+
+  /* ── DM ── */
+  .dm-panel { max-width: 100vw; border-radius: 16px 16px 0 0; }
+  .dm-input { font-size: .85rem; }
+  .dm-send-btn { padding: .4rem .7rem; font-size: .82rem; }
+
+  /* ── 모달 ── */
+  .modal-box { max-width: calc(100vw - 20px); padding: 1.2rem .9rem; }
+  .ranking-modal { max-width: calc(100vw - 16px); padding: .9rem .75rem; }
+  .modal-input { font-size: .9rem; padding: .6rem .85rem; }
+  .btn-primary, .btn-secondary { min-height: 42px; }
+  .modal-buttons { gap: .5rem; }
+
+  /* ── 기타 ── */
+  .other-section { padding: .8rem .85rem; }
+  .other-row { gap: .4rem; }
+  .vol-slider { max-width: 100px; }
+  .exchange-item { gap: .55rem; padding: .45rem .55rem; }
+  .exchange-chip-svg svg { width: 36px !important; height: 36px !important; }
+
+  /* ── 투자 차트 ── */
+  .invest-card { padding: .65rem; }
+  .invest-header { gap: .4rem; }
+
+  /* ── 커뮤니티 ── */
+  .community-wrap, .toto-wrap { padding: .65rem .5rem; gap: .6rem; }
+  .ranking-table td, .ranking-table th { padding: .35rem .4rem; font-size: .78rem; }
+
+  /* ── 게임 설명서 ── */
+  .game-help-box { padding: 1.1rem .9rem; max-height: 88vh; }
+  .game-help-box h2 { font-size: 1rem; }
+  .game-help-box p, .game-help-box ul li { font-size: .78rem; }
+  .game-help-box td, .game-help-box th { font-size: .74rem; padding: .22rem .3rem; }
+}
+
+/* ────────────────────────────────────────────
+   XS: ≤360px (작은 폰)
+   ─────────────────────────────────────────── */
+@media (max-width: 360px) {
+  .nav-brand { display: none; }
+  .nav-group-btn { font-size: .68rem; padding: .25rem .45rem; }
+  .nav-sub-btn { font-size: .66rem; padding: .2rem .4rem; }
+
+  .card { width: 45px; height: 63px; }
+  .chip-svg { width: 38px; height: 38px; }
+  .action-button { font-size: .74rem; padding: .38rem .5rem; }
+
+  .yacht-die { width: 46px; height: 46px; }
+  .yacht-die-face { font-size: 1.6rem; }
+  .horse-grid { grid-template-columns: repeat(2, 1fr); }
+  .pvp-btn { font-size: .72rem; padding: .35rem .55rem; }
+}
+
+/* ────────────────────────────────────────────
+   터치 인터랙션 (마우스 없는 기기)
+   ─────────────────────────────────────────── */
+@media (hover: none) {
+  /* hover 효과 제거 — 터치는 active로 */
+  .card:hover { transform: none; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+  .horse-card:hover { transform: none; box-shadow: none; }
+  .chip-stack:hover { transform: none; filter: none; }
+  .btn-primary:hover { transform: none; box-shadow: 0 4px 16px rgba(241,196,15,.2); }
+  .btn-secondary:hover { transform: none; }
+  .yacht-die:hover:not(.unrolled) { transform: none; }
+
+  /* active 피드백 — 확실한 터치감 */
+  .card:active { transform: scale(.95); opacity: .85; transition: transform .08s, opacity .08s; }
+  .horse-card:active { transform: scale(.95); opacity: .85; }
+  .btn-primary:active { transform: scale(.93) !important; filter: brightness(.88); }
+  .btn-secondary:active { transform: scale(.93) !important; filter: brightness(.85); }
+  .action-button:active:not(:disabled) { transform: scale(.92) !important; }
+  .chip-stack:active { transform: scale(.88) !important; }
+  .pvp-btn:active { transform: scale(.93) !important; }
+  .pvp-card-wrap.discardable:active { transform: translateY(-4px); }
+  .yacht-die:active:not(.unrolled) { transform: scale(.9); }
+  .nav-sub-btn:active { background: rgba(241,196,15,.12); }
+  .nav-group-btn:active { background: rgba(241,196,15,.15); }
+  .nav-icon-btn:active { transform: scale(.88); }
+  .bb-pick-btn:active { transform: scale(.92); }
+  .toto-sub-btn:active { background: rgba(241,196,15,.15); }
+  .horse-num-btn:active { transform: scale(.9); }
+  .dm-conv-item:active { background: rgba(255,255,255,.1) !important; }
+  .yacht-score-row.selectable:active { background: rgba(52,152,219,.2) !important; }
+}
+
+/* ────────────────────────────────────────────
+   가로 모드 (landscape)
+   ─────────────────────────────────────────── */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --nav-h: 44px; }
+  .main-nav { flex-direction: row; height: 44px; }
+  .nav-row-top { flex: 1; height: 44px; border-bottom: none; }
+  .nav-row-sub {
+    position: fixed; top: 44px; left: 0; right: 0;
+    height: 34px; z-index: 1001;
+    background: rgba(3,7,6,.97);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  .tab-page { top: 78px; height: calc(100vh - 78px); }
+  .card { width: 48px; height: 67px; }
+  .betting-zone { min-height: 60px; }
+  .player-chips-area { padding: .3rem .5rem; }
+  .chip-svg { width: 38px; height: 38px; }
+  .dice-face { font-size: 3.2rem; }
+  .yacht-die { width: 46px; height: 46px; }
+}
+
+/* ────────────────────────────────────────────
+   PWA / 홈화면 추가 지원
+   ─────────────────────────────────────────── */
+@media (display-mode: standalone) {
+  /* iOS safe area */
+  .main-nav { padding-top: env(safe-area-inset-top, 0); }
+  .tab-page { padding-bottom: env(safe-area-inset-bottom, 0); }
+}
+
+/* ── DM 모바일 바텀시트 ── */
+@media (max-width: 480px) {
+  .modal-overlay#dmOverlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .dm-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    animation: sheetUp .28s cubic-bezier(.32,0,.67,0);
+  }
+  @keyframes sheetUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  /* 게임 설명서도 바텀시트 */
+  .game-help-overlay {
+    align-items: flex-end;
+  }
+  .game-help-box {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 88vh;
+    padding-bottom: env(safe-area-inset-bottom, 12px);
+    animation: sheetUp .28s cubic-bezier(.32,0,.67,0);
+  }
+}
