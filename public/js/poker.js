@@ -37,10 +37,7 @@ function clearBet(){
 // ── God blessing (0 chips) ───────────────────
 async function showGodBlessing(){
   isAnimating=true;document.getElementById('godOverlay').classList.add('show');
-  let ga=10n;
-  if(BigInt(stats.maxChips||'0')>=10000n){
-    try{const res=await fetchT('/api/ranking',null,5000);const data=await res.json();const top=(data.top100&&data.top100[0])||data[0];if(top&&top.maxChips){const pct=BigInt(top.maxChips)/1000n;if(pct>0n)ga=pct;}}catch(e){}
-  }
+  const ga=10n;
   document.getElementById('godMsgAmount').textContent='+'+formatBig(ga)+' 토큰';
   setTimeout(()=>{chips=ga;chipDist=computeGreedyDist(chips);saveState();document.getElementById('godOverlay').classList.remove('show');isAnimating=false;updateChipsDisplay();},3000);
 }
