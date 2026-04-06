@@ -613,17 +613,18 @@ app.get('/api/ranking', async (req, res) => {
   const { nick } = req.query;
   try {
     const col = (await getDb()).collection('players');
-    const docs = await col.find({}, { projection: { nickname: 1, stats: 1, createdAt: 1 } }).toArray();
-    docs.sort((a, b) => cmpBigStr(b.stats?.maxChips || '0', a.stats?.maxChips || '0'));
+    const docs = await col.find({}, { projection: { nickname: 1, chips: 1, title: 1, titleColor: 1 } }).toArray();
+    docs.sort((a, b) => cmpBigStr(b.chips || '0', a.chips || '0'));
     const top100 = docs.slice(0, 100).map((d, i) => ({
-      rank: i + 1, nickname: d.nickname, maxChips: d.stats?.maxChips || '0',
+      rank: i + 1, nickname: d.nickname, maxChips: d.chips || '0',
+      title: d.title || null, titleColor: d.titleColor || null,
     }));
     let userRank = -1, surrounding = [];
     if (nick) {
       userRank = docs.findIndex(d => d.nickname === nick);
       if (userRank >= 100) {
         surrounding = docs.slice(Math.max(0, userRank - 1), userRank + 2)
-          .map((d, i) => ({ rank: Math.max(0, userRank - 1) + i + 1, nickname: d.nickname, maxChips: d.stats?.maxChips || '0' }));
+          .map((d, i) => ({ rank: Math.max(0, userRank - 1) + i + 1, nickname: d.nickname, maxChips: d.chips || '0' }));
       }
     }
     res.json({ top100, userRank: userRank + 1, surrounding });
