@@ -193,8 +193,8 @@ function renderYachtResult(el) {
   const bonus = upperScore >= 63 ? 35 : 0;
   const total = scoreSum + bonus;
 
-  // 배당 계산: 점수 / 100 배율 (최소 0, 최대 3배)
-  const mult = Math.min(3, total / 100);
+  // 배당: 180점 손익분기 (최대 ×2.5). 예전 100점=×1 은 기댓값 과다
+  const mult = Math.min(2.5, total / 180);
   const payout = BigInt(Math.round(Number(yachtBetAmt) * mult));
   const profit = payout - yachtBetAmt;
 
@@ -210,8 +210,8 @@ function renderYachtResult(el) {
 
   el.innerHTML = `
 <div class="yacht-result">
-  <div class="yacht-result-title" style="color:${total>=200?'#2ecc71':total>=100?'#f1c40f':'#e74c3c'}">
-    ${total>=200?'🎉 훌륭해요!':total>=100?'👍 좋아요!':'😢 다음에!'}
+  <div class="yacht-result-title" style="color:${total>=180?'#2ecc71':total>=120?'#f1c40f':'#e74c3c'}">
+    ${total>=180?'🎉 훌륭해요!':total>=120?'👍 좋아요!':'😢 다음에!'}
   </div>
   <div class="yacht-result-score">${total}점</div>
   ${bonus>0?`<div class="yacht-result-bonus">상단 보너스 +35점 포함</div>`:''}

@@ -300,15 +300,20 @@ function getHandRank(hand){
   const cnts={};vals.forEach(v=>cnts[v]=(cnts[v]||0)+1);
   const cv=Object.values(cnts).sort((a,b)=>b-a);
   const p=(name,n,d)=>({name,pnum:n,pden:d||1,payoutF:n/(d||1)});
-  if(isFlush&&isStraight&&vals[0]===14&&vals[1]===13)return p('로얄 스트레이트 플러시',1200);
-  if(isFlush&&isStraight)return p('스트레이트 플러시',300);
-  if(cv[0]===4)return p('포카드',60);
-  if(cv[0]===3&&cv[1]===2)return p('풀하우스',30);
-  if(isFlush)return p('플러시',18);
-  if(isStraight)return p('스트레이트',12);
-  if(cv[0]===3)return p('트리플',6);
-  if(cv[0]===2&&cv[1]===2)return p('투페어',4);
-  if(cv[0]===2)return p('원페어',2);
+  if(isFlush&&isStraight&&vals[0]===14&&vals[1]===13)return p('로얄 스트레이트 플러시',250);
+  if(isFlush&&isStraight)return p('스트레이트 플러시',50);
+  if(cv[0]===4)return p('포카드',20);
+  if(cv[0]===3&&cv[1]===2)return p('풀하우스',8);
+  if(isFlush)return p('플러시',5);
+  if(isStraight)return p('스트레이트',4);
+  if(cv[0]===3)return p('트리플',3);
+  if(cv[0]===2&&cv[1]===2)return p('투페어',2);
+  if(cv[0]===2){
+    const pairRank=Math.max(...vals.filter(v=>cnts[v]===2));
+    // Jacks or Better: J/Q/K/A 원페어만 원금 환급. 낮은 원페어는 패배
+    if(pairRank>=11) return p('원페어 (J+)',1);
+    return p('원페어',0);
+  }
   return p('노페어',0);
 }
 

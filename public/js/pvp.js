@@ -6,21 +6,26 @@
 const MP_API = '/api/mp';
 let mpPollTimer = null, mpLastState = null;
 
+async function mpReadJson(res) {
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error(res.ok ? 'invalid_json' : 'http_' + res.status); }
+}
 function mpFetch(action, extra) {
   return fetchT(MP_API + '?action=' + action, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ nickname: sessionNickname, token: sessionToken, ...(extra||{}) })
-  }, 8000);
+  }, 20000);
 }
-function mpStartPolling() { mpStopPolling(); mpPollTimer = setInterval(mpPoll, 1500); }
+function mpStartPolling() { mpStopPolling(); mpPollTimer = setInterval(mpPoll, 2000); }
 function mpStopPolling() { if (mpPollTimer) { clearInterval(mpPollTimer); mpPollTimer = null; } }
 
 async function mpPoll() {
   if (!sessionNickname || !sessionToken) return;
   try {
-    const res = await fetchT(`${MP_API}?action=poll&nickname=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`, null, 5000);
+    const res = await fetchT(`${MP_API}?action=poll&nickname=${encodeURIComponent(sessionNickname)}&token=${sessionToken}`, null, 15000);
     if (!res.ok) return;
-    const d = await res.json();
+    const d = await mpReadJson(res);
     mpHandleState(d);
   } catch(e) {}
 }
@@ -198,7 +203,7 @@ function mpActionHTML(d) {
 async function mpSetBaseBet() {
   try {
     const res = await mpFetch('set_bet', {});
-    const d = await res.json();
+    const d = await mpReadJson(res);
     if (!res.ok) { alert(d.error||'오류'); return; }
     mpHandleState(d); mpLastState = d;
   } catch(e) { alert('서버 오류'); }
@@ -230,7 +235,7 @@ async function mpConfirmDiscard() {
   const idx = _discardSelected;
   try {
     const res = await mpFetch('discard', { discardIdx: idx });
-    const d = await res.json();
+    const d = await mpReadJson(res);
     if (!res.ok) { alert(d.error||'오류'); return; }
     _discardSelected = null;
     mpHandleState(d); mpLastState = d;
@@ -242,7 +247,7 @@ async function mpBetAction(act, units) {
   const raiseUnits = (finalAct === 'raise' && units > 0) ? units : 1;
   try {
     const res = await mpFetch('bet_action', { betAction: finalAct, raiseUnits });
-    const d = await res.json();
+    const d = await mpReadJson(res);
     if (!res.ok) { alert(d.error||'오류'); return; }
     mpHandleState(d); mpLastState = d;
   } catch(e) { alert('서버 오류'); }
@@ -292,18 +297,24 @@ async function mpJoinQueue() {
     <p style="color:#f1c40f">매칭 대기 중...</p>
     <button class="pvp-btn secondary" onclick="mpCancelQueue()" style="margin-top:.8rem">취소</button>
   </div>`;
-  try {
-    const res = await mpFetch('queue');
-    const d = await res.json();
-    if (!res.ok) {
-      content.innerHTML = `<p style="color:#e74c3c">${escHtml(d.error||'오류')}</p><button class="pvp-btn primary" onclick="mpJoinQueue()">다시 시도</button>`;
+  let lastMsg = '서버 연결 실패';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await mpFetch('queue');
+      const d = await mpReadJson(res);
+      if (!res.ok) {
+        content.innerHTML = `<p style="color:#e74c3c">${escHtml(d.error||'오류')}</p><button class="pvp-btn primary" onclick="mpJoinQueue()">다시 시도</button>`;
+        return;
+      }
+      if (d.status==='in_game'||d.status==='game_over') mpHandleState(d);
+      mpStartPolling();
       return;
+    } catch(e) {
+      lastMsg = e.name === 'AbortError' ? '서버 응답 지연 (재시도 중...)' : '서버 연결 실패';
+      if (attempt < 2) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
     }
-    if (d.status==='in_game'||d.status==='game_over') mpHandleState(d);
-    mpStartPolling();
-  } catch(e) {
-    content.innerHTML = `<p style="color:#e74c3c">서버 연결 실패</p><button class="pvp-btn primary" onclick="mpJoinQueue()">다시 시도</button>`;
   }
+  content.innerHTML = `<p style="color:#e74c3c">${escHtml(lastMsg)}</p><button class="pvp-btn primary" onclick="mpJoinQueue()">다시 시도</button>`;
 }
 
 async function mpCancelQueue() {
@@ -314,6 +325,7 @@ async function mpCancelQueue() {
 
 function mpExit() {
   mpStopPolling(); mpLastState = null; _discardSelected = null;
+  try { mpFetch('leave'); } catch(e) {}
   const area = document.getElementById('pvpGameArea');
   const content = document.getElementById('pvpContent');
   area.style.display = 'none';

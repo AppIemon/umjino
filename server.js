@@ -13,12 +13,12 @@ async function getDb() {
   if (_db) return _db;
   if (!_client) {
     _client = new MongoClient(MONGODB_URI, {
-      serverSelectionTimeoutMS: 4000,
-      connectTimeoutMS: 4000,
-      socketTimeoutMS: 6000,
-      maxPoolSize: 1,          // serverless: 연결 1개로 충분
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 8000,
+      socketTimeoutMS: 15000,
+      maxPoolSize: 5,
       minPoolSize: 0,
-      maxIdleTimeMS: 10000,    // 10초 idle이면 반환
+      maxIdleTimeMS: 60000,
     });
   }
   try {
@@ -31,7 +31,25 @@ async function getDb() {
     }
   }
   _db = _client.db('poker');
+  await ensureIndexes(_db);
   return _db;
+}
+
+let _indexed = false;
+async function ensureIndexes(db) {
+  if (_indexed) return;
+  _indexed = true;
+  try {
+    await Promise.all([
+      db.collection('mp_queue').createIndex({ nickname: 1 }, { unique: true }),
+      db.collection('mp_queue').createIndex({ createdAt: 1 }),
+      db.collection('mp_games').createIndex({ gameId: 1 }, { unique: true }),
+      db.collection('mp_games').createIndex({ 'players.nickname': 1, phase: 1 }),
+    ]);
+  } catch (e) {
+    console.error('ensureIndexes', e.message);
+    _indexed = false;
+  }
 }
 
 // ─── Crypto ───────────────────────────────────────────────────────────────────
@@ -153,12 +171,29 @@ function mpCmpEval(e1, e2) {
 }
 
 // ─── Match making ────────────────────────────────────────────────────────────
+function mpQueueDoc(res) {
+  if (!res) return null;
+  if (res.nickname) return res;
+  if (res.value && res.value.nickname) return res.value;
+  return null;
+}
+
 async function mpTryMatch(db) {
   const qCol = db.collection('mp_queue');
-  const queue = await qCol.find({}).sort({createdAt:1}).toArray();
-  if (queue.length < 2) return null;
-  const p1 = queue[0], p2 = queue[1];
-  await qCol.deleteMany({ _id: { $in: [p1._id, p2._id] } });
+  // Atomic dequeue so two serverless invocations cannot grab the same players
+  const p1 = mpQueueDoc(await qCol.findOneAndDelete({}, { sort: { createdAt: 1 } }));
+  if (!p1) return null;
+  const p2 = mpQueueDoc(await qCol.findOneAndDelete({}, { sort: { createdAt: 1 } }));
+  if (!p2) {
+    try {
+      await qCol.updateOne(
+        { nickname: p1.nickname },
+        { $setOnInsert: { nickname: p1.nickname, token: p1.token, chips: p1.chips, chips_num: p1.chips_num, createdAt: p1.createdAt || new Date() } },
+        { upsert: true }
+      );
+    } catch (e) { /* already requeued */ }
+    return null;
+  }
   const minChips = cmpBigStr(p1.chips, p2.chips) <= 0 ? p1.chips : p2.chips;
   const gameId = crypto.randomBytes(8).toString('hex');
   const game = {
@@ -643,10 +678,11 @@ app.get('/api/mp', async (req, res) => {
     if (!me) return res.status(401).json({ error: '인증 실패' });
 
     if (action === 'poll') {
+      await mpCleanup();
       const game = await gCol.findOne({
-        $or: [{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
-        phase: { $ne: 'cleanup' }
-      });
+        $or: [{'players.nickname':nickname}],
+        phase: { $nin: ['cleanup'] }
+      }, { sort: { lastUpdate: -1 } });
       if (game) {
         const pidx = game.players[0].nickname===nickname ? 0 : 1;
         if (Date.now()-new Date(game.lastUpdate).getTime() > 90000 &&
@@ -658,11 +694,12 @@ app.get('/api/mp', async (req, res) => {
       }
       const inQueue = await qCol.findOne({ nickname });
       if (inQueue) {
+        await qCol.updateOne({ nickname }, { $set: { createdAt: new Date() } });
         await mpTryMatch(db);
         const newGame = await gCol.findOne({
-          $or: [{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
-          phase: { $ne: 'cleanup' }
-        });
+          $or: [{'players.nickname':nickname}],
+          phase: { $nin: ['cleanup'] }
+        }, { sort: { lastUpdate: -1 } });
         if (newGame) return res.json(mpBuildGameView(newGame, newGame.players[0].nickname===nickname?0:1));
         return res.json({ status: 'queued' });
       }
@@ -686,15 +723,29 @@ app.post('/api/mp', async (req, res) => {
 
     // ── queue ──────────────────────────────────────────────────────────────
     if (action === 'queue') {
+      await mpCleanup();
       const existGame = await gCol.findOne({
-        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
-        phase:{$ne:'cleanup'}
-      });
-      if (existGame) return res.status(400).json({ error: '이미 게임 중' });
+        $or:[{'players.nickname':nickname}],
+        phase:{$nin:['cleanup','finished']}
+      }, { sort: { lastUpdate: -1 } });
+      if (existGame) {
+        const pidx = existGame.players[0].nickname===nickname ? 0 : 1;
+        return res.json(mpBuildGameView(existGame, pidx));
+      }
+      await gCol.updateMany(
+        { 'players.nickname': nickname, phase: 'finished' },
+        { $set: { phase: 'cleanup', lastUpdate: new Date() } }
+      );
       const existQ = await qCol.findOne({ nickname });
       if (!existQ) {
         const chipsNum = Number(BigInt(me.chips||'10') > 9007199254740991n ? 9007199254740991n : BigInt(me.chips||'10'));
-        await qCol.insertOne({ nickname, token, chips: me.chips||'10', chips_num: chipsNum, createdAt: new Date() });
+        try {
+          await qCol.insertOne({ nickname, token, chips: me.chips||'10', chips_num: chipsNum, createdAt: new Date() });
+        } catch (e) {
+          if (e.code !== 11000) throw e;
+        }
+      } else {
+        await qCol.updateOne({ nickname }, { $set: { token, chips: me.chips||'10', createdAt: new Date() } });
       }
       const game = await mpTryMatch(db);
       if (game) return res.json(mpBuildGameView(game, game.players[0].nickname===nickname?0:1));
@@ -707,7 +758,7 @@ app.post('/api/mp', async (req, res) => {
     // ── set_bet: setter picks base bet (ante) ──────────────────────────────
     if (action === 'set_bet') {
       const game = await gCol.findOne({
-        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        $or:[{'players.nickname':nickname}],
         phase:'setting_bet'
       });
       if (!game) return res.status(400).json({ error: '게임 없음' });
@@ -749,7 +800,7 @@ app.post('/api/mp', async (req, res) => {
     // ── discard: pick 1 card to discard (index 0-3), then set face-up ────
     if (action === 'discard') {
       const game = await gCol.findOne({
-        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        $or:[{'players.nickname':nickname}],
         phase:'discard'
       });
       if (!game) return res.status(400).json({ error: '버리기 불가' });
@@ -792,7 +843,7 @@ app.post('/api/mp', async (req, res) => {
     // ── bet_action: check/call/raise/fold ─────────────────────────────────
     if (action === 'bet_action') {
       const game = await gCol.findOne({
-        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        $or:[{'players.nickname':nickname}],
         phase:{$in:['bet1','bet2','bet3']}
       });
       if (!game) return res.status(400).json({ error: '베팅 불가' });
@@ -846,12 +897,12 @@ app.post('/api/mp', async (req, res) => {
     if (action === 'leave') {
       await qCol.deleteMany({ nickname });
       const game = await gCol.findOne({
-        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        $or:[{'players.nickname':nickname}],
         phase:{$nin:['cleanup','finished']}
       });
       if (game) { const pidx=game.players[0].nickname===nickname?0:1; await mpFinishGame(db,game,1-pidx); }
       await gCol.updateMany({
-        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        $or:[{'players.nickname':nickname}],
         phase:'finished'
       },{$set:{phase:'cleanup'}});
       return res.json({ status: 'idle' });
@@ -998,7 +1049,10 @@ app.post('/api/presence', async (req, res) => {
 });
 
 // ─── Cleanup stale queue/games periodically ─────────────────────────────────
+let _lastMpCleanup = 0;
 async function mpCleanup() {
+  if (Date.now() - _lastMpCleanup < 15000) return;
+  _lastMpCleanup = Date.now();
   try {
     const db = await getDb();
     const now = new Date();
@@ -1245,8 +1299,8 @@ app.post('/api/dice', async (req, res) => {
     if (BigInt(p.chips || '0') < amt) return res.status(400).json({ error: '칩 부족' });
     const roll = Math.floor(Math.random() * 6) + 1;
     let won = false, mult = 0n;
-    if (betType === 'exact') { won = roll === Number(guess); mult = 7n; }   // EV 7/6 ≈ 1.17
-    else if (betType === 'parity') { won = (roll % 2 === 0) === (guess === 'even'); mult = 2n; } // EV 1.0 → 2.2 적용
+    if (betType === 'exact') { won = roll === Number(guess); mult = 5n; }   // EV 5/6 ≈ 0.83
+    else if (betType === 'parity') { won = (roll % 2 === 0) === (guess === 'even'); mult = 2n; } // EV 1.0
     else return res.status(400).json({ error: 'betType: exact|parity' });
     const newChips = won
       ? (BigInt(p.chips) + amt * (mult - 1n)).toString()
@@ -1261,9 +1315,9 @@ app.post('/api/dice', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // race 생성은 자동: GET creates/returns active race, POST places bet
 const HORSE_DISTANCES = [
-  { label: '단거리 (1000m)', duration: 20, ev: 1.20 },
-  { label: '중거리 (2000m)', duration: 40, ev: 1.28 },
-  { label: '장거리 (3000m)', duration: 65, ev: 1.35 },
+  { label: '단거리 (1000m)', duration: 20, ev: 0.88 },
+  { label: '중거리 (2000m)', duration: 40, ev: 0.85 },
+  { label: '장거리 (3000m)', duration: 65, ev: 0.82 },
 ];
 
 function generateHorseRace(numHorses, distIdx) {
@@ -1272,7 +1326,7 @@ function generateHorseRace(numHorses, distIdx) {
   const total = rawOdds.reduce((a, b) => a + b, 0);
   const targetSum = numHorses / dist.ev;
   const odds = rawOdds.map(o => (o / total) * targetSum);
-  const payouts = odds.map(o => Math.max(1.2, numHorses / o));
+  const payouts = odds.map(o => Math.max(1.05, numHorses / o));
   const NAMES = ['천리마','적토마','번개','폭풍','질주','황금','바람','불꽃','태양','달빛'];
   const horses = Array.from({ length: numHorses }, (_, i) => ({
     name: NAMES[i] || `말${i+1}`,
@@ -1352,6 +1406,8 @@ function runHorseRace(horses) {
 
 app.get('/api/horse', async (req, res) => {
   try {
+    await horseFinishExpired();
+    await horseEnsureActive();
     const db = await getDb();
     const races = db.collection('horse_races');
     const now = new Date();
