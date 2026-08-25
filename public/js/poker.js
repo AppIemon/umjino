@@ -129,8 +129,9 @@ function evaluateHand(){
     ov.classList.add('show');animationTimeout=setTimeout(()=>collectPending(),8000);
   }else{
     pendingWin=0n;saveStats();sfxLose();
-    if(typeof saveRecentPlay==='function')saveRecentPlay({type:'🃏 파이브 포커',desc:'패배 -'+formatBig(currentBet)+'칩',result:'lose'});
-    titleEl.textContent='패배';titleEl.className='result-title lose';amountEl.textContent='-'+formatBig(currentBet)+' 칩';
+    const loseName=result.name && result.name!=='노페어' ? result.name : '패배';
+    if(typeof saveRecentPlay==='function')saveRecentPlay({type:'🃏 파이브 포커',desc:loseName+' -'+formatBig(currentBet)+'칩',result:'lose'});
+    titleEl.textContent=loseName;titleEl.className='result-title lose';amountEl.textContent='-'+formatBig(currentBet)+' 칩';
     document.getElementById('resultButtons').innerHTML='<button class="skip-button" onclick="skipAnimation()">스킵 (Enter)</button>';
     ov.classList.add('show');animationTimeout=setTimeout(()=>{isAnimating=false;resetGame()},2000);
   }
@@ -182,7 +183,7 @@ function revealDoubleCard(nextCard){
   document.getElementById('doubleButtons').innerHTML='';
   document.getElementById('doubleNextCardInner').style.transform='rotateY(180deg)';
   setTimeout(()=>{
-    const bRv=rankValue[doubleBaseCard.rank],nRv=rankValue[nextCard.rank],win=nRv>=bRv;
+    const bRv=rankValue[doubleBaseCard.rank],nRv=rankValue[nextCard.rank],win=nRv>bRv;
     const msgEl=document.getElementById('doubleResultMsg'),potEl=document.getElementById('doublePot'),btns=document.getElementById('doubleButtons');
     if(win){
       sfxDoubleWin();pendingWin*=2n;
