@@ -17,7 +17,8 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
   -webkit-touch-callout: none;
 }
 /* Cards specifically need to not trigger text selection */
-.card svg, .mp-card svg, .mp-op-card svg {
+.card svg, .mp-card svg, .mp-op-card svg,
+.card img, .playing-card-img, .hwatu-img {
   pointer-events: none;
 }
 
@@ -130,6 +131,7 @@ body{font-family:Arial,sans-serif;background:#0a1a10;min-height:100vh;overflow:h
 .card{width:88px;height:123px;border-radius:8px;cursor:pointer;transition:all .3s;box-shadow:0 4px 8px rgba(0,0,0,.3)}
 .card:hover{transform:translateY(-8px)}.card.selected{transform:translateY(-18px);box-shadow:0 8px 16px rgba(241,196,15,.6)}
 .card svg{width:100%;height:100%;border-radius:8px;display:block}
+.card img,.playing-card-img{width:100%;height:100%;object-fit:contain;display:block;border-radius:8px;pointer-events:none}
 .betting-zone{position:relative;display:flex;justify-content:center;align-items:center;min-height:110px;background:radial-gradient(circle,rgba(46,204,113,.2) 0%,transparent 70%);border:3px dashed rgba(46,204,113,.5);border-radius:20px;margin:.4rem 1.5rem}
 .betting-zone-label{position:absolute;top:8px;left:50%;transform:translateX(-50%);color:#2ecc71;font-size:.95rem;font-weight:bold;pointer-events:none}
 .bet-amount{font-size:1.5rem;color:#f1c40f;font-weight:bold}
@@ -1799,7 +1801,8 @@ body {
   height: calc(var(--vh, 1vh) * 100 - var(--nav-h));
   /* overflow는 탭별로 */
 }
-#tabPoker, #tabSlot, #tabPvp, #tabDice, #tabYacht { overflow: hidden; }
+#tabPoker, #tabSlot, #tabDice, #tabYacht { overflow: hidden; }
+#tabPvp { overflow-y: auto; }
 #tabRoulette, #tabToto, #tabCommunity, #tabAdmin, #tabOther { overflow-y: auto; }
 
 /* ────────────────────────────────────────────
@@ -2047,3 +2050,76 @@ body {
     animation: sheetUp .28s cubic-bezier(.32,0,.67,0);
   }
 }
+
+/* ── 멀티플레이 로비 / 화투 / 고스톱 ── */
+.playing-card-img, .hwatu-img {
+  display: block;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.45);
+  object-fit: contain;
+  background: #1a1208;
+  pointer-events: none;
+  user-select: none;
+}
+.mp-lobby { width: 100%; }
+.mp-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .55rem;
+}
+.mp-pick-card {
+  background: rgba(255,255,255,.05);
+  border: 2px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  padding: .85rem .45rem .7rem;
+  color: #ddd;
+  cursor: pointer;
+  text-align: center;
+  transition: all .2s cubic-bezier(.34,1.56,.64,1);
+}
+.mp-pick-card:hover { border-color: rgba(241,196,15,.45); transform: translateY(-3px); }
+.mp-pick-card.selected {
+  border-color: #f1c40f;
+  background: rgba(241,196,15,.14);
+  box-shadow: 0 6px 18px rgba(241,196,15,.2);
+}
+.mp-pick-emoji { font-size: 1.7rem; margin-bottom: .25rem; }
+.mp-pick-name { font-weight: 800; color: #f1c40f; font-size: .92rem; }
+.mp-pick-blurb { font-size: .62rem; color: #888; margin-top: .28rem; line-height: 1.35; }
+.hwatu-row { justify-content: center; }
+.gs-game { max-width: 640px; }
+.gs-score { font-size: .72rem; color: #f1c40f; margin-top: .12rem; }
+.gs-captured { background: rgba(0,0,0,.28); border-radius: 10px; padding: .4rem .5rem; }
+.gs-cap-label { font-size: .65rem; font-weight: 700; margin-bottom: .25rem; color: #888; }
+.gs-cap-label.me { color: #2ecc71; }
+.gs-cap-label.op { color: #e74c3c; }
+.gs-cap-rows { display: flex; flex-direction: column; gap: .2rem; }
+.gs-cap-group { display: flex; flex-wrap: wrap; gap: .18rem; align-items: center; }
+.gs-cap-group > span { font-size: .58rem; color: #666; width: 1.4rem; flex-shrink: 0; }
+.gs-op-hand, .gs-hand, .gs-field-row, .gs-flip-row {
+  display: flex; flex-wrap: wrap; gap: .25rem; justify-content: center; align-items: flex-end;
+}
+.gs-field { background: rgba(46,204,113,.06); border: 1px dashed rgba(46,204,113,.25); border-radius: 12px; padding: .45rem; }
+.gs-hand { margin-top: .2rem; }
+.gs-hand-card {
+  background: none; border: none; padding: 0; cursor: pointer;
+  transition: transform .15s;
+}
+.gs-hand-card:hover:not(:disabled) { transform: translateY(-8px); }
+.gs-hand-card:disabled { opacity: .85; cursor: default; }
+.gs-events { text-align: center; }
+.gs-events span {
+  display: inline-block; margin: 0 .15rem;
+  background: rgba(241,196,15,.18); color: #f1c40f;
+  font-size: .72rem; font-weight: 800;
+  padding: .12rem .45rem; border-radius: 999px;
+}
+.gs-choose p, .gs-gostop p { color: #ccc; font-size: .8rem; margin: .4rem 0 .55rem; text-align: center; }
+.gs-flip-row { gap: 1rem; margin-bottom: .4rem; }
+@media (max-width: 480px) {
+  .mp-pick-grid { grid-template-columns: 1fr; }
+  .mp-pick-card { display: flex; align-items: center; gap: .7rem; text-align: left; padding: .7rem .8rem; }
+  .mp-pick-emoji { margin: 0; font-size: 1.5rem; }
+  .pvp-box { max-width: 100%; }
+}
+

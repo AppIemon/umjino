@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 360" width="220" height="360">
+  <rect x="1" y="1" width="218" height="358" rx="14" fill="#3e2723" stroke="#1b0000" stroke-width="2"/>
+  <rect x="8" y="8" width="204" height="344" rx="10" fill="#f3e5ab"/>
+  <rect x="14" y="14" width="192" height="332" rx="8" fill="#fbe9e7" stroke="#e64a19" stroke-width="2"/>
+  <rect x="14" y="14" width="192" height="46" rx="8" fill="#bf360c"/>
+  <rect x="14" y="44" width="192" height="16" fill="#bf360c"/>
+  <text x="28" y="44" font-size="22" font-weight="800" fill="#fff8e1">10</text>
+  <text x="52" y="42" font-size="13" fill="#fff8e1" opacity=".9">월 단풍</text>
+  <text x="192" y="42" text-anchor="end" font-size="13" font-weight="700" fill="#ffe082">열끗</text>
+  <g transform="translate(110,150)">
+      <path d="M0,-8 L18,-28 L14,-4 L32,8 L10,10 L0,30 L-10,10 L-32,8 L-14,-4 L-18,-28 Z" fill="#e64a19"/>
+      <path d="M22,6 L36,-8 L30,10 L46,20 L28,22 L22,38 L16,22 L-2,20 L14,10 L8,-8 Z" fill="#ff7043"/>
+    </g>
+  <rect x="78" y="226" width="64" height="36" rx="8" fill="#bf360c"/><text x="110" y="251" text-anchor="middle" font-size="18" fill="#fff3e0" font-weight="700">十</text>
+  <text x="110" y="312" text-anchor="middle" font-size="12" fill="#bf360c" font-weight="700">단풍</text>
+  <text x="110" y="330" text-anchor="middle" font-size="11" fill="#e64a19">열끗</text>
+</svg>

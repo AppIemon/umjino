@@ -154,29 +154,8 @@
 <!-- PVP -->
 <div class="tab-page" id="tabPvp">
   <div class="pvp-box">
-    <div id="pvpContent">
-      <h2 style="color:#f1c40f;margin-bottom:.7rem">⚔️ 세븐 포커 대전</h2>
-      <p style="color:#aaa;font-size:.82rem;margin-bottom:1.2rem">4장 배분 → 1장 버리기 → 3차 베팅 → 7장 중 최선 5장 승부</p>
-      <button class="btn-primary" onclick="mpJoinQueue()">매칭 시작</button>
-    </div>
-    <div id="pvpGameArea" style="display:none">
-      <!-- Header row -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;background:rgba(0,0,0,.3);border-radius:10px;padding:.45rem .7rem">
-        <div id="pvpMyInfo" style="font-size:.85rem"></div>
-        <div id="pvpPot" style="color:#f1c40f;font-weight:bold;font-size:.9rem;text-align:center"></div>
-        <div id="pvpOpInfo" style="font-size:.85rem;text-align:right"></div>
-      </div>
-      <!-- Phase label -->
-      <div id="pvpPhaseLabel" style="text-align:center;color:#aaa;font-size:.78rem;margin-bottom:.4rem;background:rgba(0,0,0,.2);border-radius:6px;padding:.22rem .5rem"></div>
-      <!-- Opponent cards -->
-      <div id="pvpOpCards" style="display:flex;gap:.3rem;flex-wrap:wrap;min-height:88px;margin-bottom:.5rem;align-items:flex-end"></div>
-      <hr style="border:none;border-top:1px dashed rgba(255,255,255,.12);margin:.3rem 0">
-      <!-- My cards -->
-      <div id="pvpMyCards" style="display:flex;gap:.3rem;flex-wrap:wrap;min-height:88px;margin-bottom:.5rem;align-items:flex-end"></div>
-      <!-- Action area -->
-      <div id="pvpActionArea" style="text-align:center;margin-top:.4rem"></div>
-      <div id="pvpStatus" style="text-align:center;color:#888;font-size:.8rem;margin-top:.35rem"></div>
-    </div>
+    <div id="pvpContent"></div>
+    <div id="pvpGameArea" style="display:none"></div>
   </div>
 </div>
 
@@ -341,6 +320,9 @@
 <script src="./js/slot.js"></script>
 <script src="./js/stickman.js"></script>
 <script src="./js/pvp.js"></script>
+<script src="./js/hwatu-cards.js"></script>
+<script src="./js/mp-sutda.js"></script>
+<script src="./js/mp-gostop.js"></script>
 <script src="./js/dm.js"></script>
 <script src="./js/toto.js"></script>
 <script src="./js/dice.js"></script>
@@ -349,7 +331,7 @@
 <script>
 // Prevent context menu on game elements (stops long-press text selection on mobile)
 document.addEventListener('contextmenu', e=>{
-  if(e.target.closest('.card,.mp-card,.mp-op-card,.chip-stack,.betting-zone,.rl-cell,.rl-outside-cell,.slot-grid'))
+  if(e.target.closest('.card,.mp-card,.mp-op-card,.chip-stack,.betting-zone,.rl-cell,.rl-outside-cell,.slot-grid,.hwatu-img,.gs-hand-card,.pvp-card-wrap'))
     e.preventDefault();
 });
 // Prevent text selection on touch

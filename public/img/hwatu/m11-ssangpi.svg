@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 360" width="220" height="360">
+  <rect x="1" y="1" width="218" height="358" rx="14" fill="#3e2723" stroke="#1b0000" stroke-width="2"/>
+  <rect x="8" y="8" width="204" height="344" rx="10" fill="#f3e5ab"/>
+  <rect x="14" y="14" width="192" height="332" rx="8" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/>
+  <rect x="14" y="14" width="192" height="46" rx="8" fill="#0d47a1"/>
+  <rect x="14" y="44" width="192" height="16" fill="#0d47a1"/>
+  <text x="28" y="44" font-size="22" font-weight="800" fill="#fff8e1">11</text>
+  <text x="52" y="42" font-size="13" fill="#fff8e1" opacity=".9">월 오동</text>
+  <text x="192" y="42" text-anchor="end" font-size="13" font-weight="700" fill="#ffe082">쌍피</text>
+  <g transform="translate(110,150)">
+      <path d="M0,-20 C-30,-50 -40,10 -8,28 C-20,0 -10,-20 0,-20" fill="#42a5f5"/>
+      <path d="M0,-20 C30,-50 40,10 8,28 C20,0 10,-20 0,-20" fill="#1e88e5"/>
+      <path d="M-6,10 Q0,40 6,10" fill="#1565c0"/>
+      <ellipse cx="0" cy="-6" rx="10" ry="14" fill="#fff59d"/>
+    </g>
+  <g>
+      <circle cx="88" cy="244" r="16" fill="#6d4c41" stroke="#d7ccc8"/>
+      <circle cx="132" cy="244" r="16" fill="#6d4c41" stroke="#d7ccc8"/>
+      <text x="88" y="250" text-anchor="middle" font-size="11" fill="#ffe0b2">皮</text>
+      <text x="132" y="250" text-anchor="middle" font-size="11" fill="#ffe0b2">皮</text>
+    </g>
+  <text x="110" y="312" text-anchor="middle" font-size="12" fill="#0d47a1" font-weight="700">오동</text>
+  <text x="110" y="330" text-anchor="middle" font-size="11" fill="#1565c0">쌍피</text>
+</svg>

@@ -2,6 +2,8 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const crypto = require('crypto');
 const path = require('path');
+const kc = require('./lib/korean-cards');
+const mpViews = require('./lib/mp-views');
 
 const MONGODB_URI = process.env.MONGODB_URI ||
   'mongodb+srv://admin:qwe098@cluster0.sw7tw.mongodb.net/?appName=Cluster0';
@@ -156,47 +158,63 @@ function mpCmpEval(e1, e2) {
 async function mpTryMatch(db) {
   const qCol = db.collection('mp_queue');
   const queue = await qCol.find({}).sort({createdAt:1}).toArray();
-  if (queue.length < 2) return null;
-  const p1 = queue[0], p2 = queue[1];
-  await qCol.deleteMany({ _id: { $in: [p1._id, p2._id] } });
-  const minChips = cmpBigStr(p1.chips, p2.chips) <= 0 ? p1.chips : p2.chips;
-  const gameId = crypto.randomBytes(8).toString('hex');
-  const game = {
-    gameId,
-    phase: 'setting_bet',   // setting_bet → discard → bet1 → bet2 → bet3 → showdown
-    setter: Math.random() < 0.5 ? 0 : 1,
-    baseBet: null,           // set by setter; both pay this as ante
-    pot: '0',                // total chips in pot
-    roundHighBet: 0,         // highest bet in current round (token units)
-    actingPlayer: 0,         // index of player whose turn it is
-    roundComplete: false,
-    deck: [],
-    players: [
-      { nickname: p1.nickname, token: p1.token, chips: p1.chips,
-        cards: [],           // {suit,rank,faceUp}
-        folded: false,
-        roundPaid: 0,        // tokens paid this round
-        acted: false,
-      },
-      { nickname: p2.nickname, token: p2.token, chips: p2.chips,
-        cards: [],
-        folded: false,
-        roundPaid: 0,
-        acted: false,
-      },
-    ],
-    maxBet: minChips,
-    showdownResult: null,
-    result: null,
-    lastUpdate: new Date(),
-    createdAt: new Date(),
-  };
-  await db.collection('mp_games').insertOne(game);
-  return game;
+  const byType = {};
+  for (const p of queue) {
+    const t = p.gameType || 'poker';
+    (byType[t] = byType[t] || []).push(p);
+  }
+  for (const gameType of ['poker', 'sutda', 'gostop']) {
+    const list = byType[gameType] || [];
+    if (list.length < 2) continue;
+    const p1 = list[0], p2 = list[1];
+    await qCol.deleteMany({ _id: { $in: [p1._id, p2._id] } });
+    const minChips = cmpBigStr(p1.chips, p2.chips) <= 0 ? p1.chips : p2.chips;
+    const gameId = crypto.randomBytes(8).toString('hex');
+    const game = {
+      gameId,
+      gameType,
+      phase: 'setting_bet',
+      setter: Math.random() < 0.5 ? 0 : 1,
+      baseBet: null,
+      pot: '0',
+      roundHighBet: 0,
+      actingPlayer: 0,
+      roundComplete: false,
+      deck: [],
+      field: [],
+      players: [
+        { nickname: p1.nickname, token: p1.token, chips: p1.chips,
+          cards: [], hand: [], captured: [],
+          folded: false, roundPaid: 0, acted: false,
+          goCount: 0, shook: false, score: 0, scoreAtLastDecision: 0,
+        },
+        { nickname: p2.nickname, token: p2.token, chips: p2.chips,
+          cards: [], hand: [], captured: [],
+          folded: false, roundPaid: 0, acted: false,
+          goCount: 0, shook: false, score: 0, scoreAtLastDecision: 0,
+        },
+      ],
+      maxBet: minChips,
+      showdownResult: null,
+      result: null,
+      peokMonths: [],
+      peokMade: 0,
+      lastEvents: [],
+      lastUpdate: new Date(),
+      createdAt: new Date(),
+    };
+    await db.collection('mp_games').insertOne(game);
+    return game;
+  }
+  return null;
 }
 
 // ─── Build view (hide opponent's face-down cards) ────────────────────────────
 function mpBuildGameView(game, pidx) {
+  const gt = game.gameType || 'poker';
+  if (gt === 'sutda') return mpViews.sutdaView(game, pidx);
+  if (gt === 'gostop') return mpViews.gostopView(game, pidx);
+
   const oidx = 1 - pidx;
   const myP = game.players[pidx];
   const opP = game.players[oidx];
@@ -204,6 +222,7 @@ function mpBuildGameView(game, pidx) {
 
   const view = {
     status: 'in_game',
+    gameType: 'poker',
     gameId: game.gameId,
     phase: game.phase,
     pot: game.pot,
@@ -223,12 +242,11 @@ function mpBuildGameView(game, pidx) {
     opRoundPaid: opP.roundPaid,
     myActed: myP.acted,
     opActed: opP.acted,
-    // My cards: all with faceUp flag
     myCards: myP.cards,
-    // Opponent cards: only faceUp ones (unless showdown)
     opCards: isShowdown ? opP.cards : opP.cards.filter(c=>c.faceUp),
     showdownResult: game.showdownResult || null,
   };
+  mpViews.pokerViewExtra(view, game, pidx);
 
   if (game.result) {
     view.status = 'game_over';
@@ -262,24 +280,24 @@ function mpCheckBetRoundDone(game) {
 // ── Advance game after betting round completes ─────────────────────────────
 async function mpAdvanceAfterBet(db, game) {
   const gCol = db.collection('mp_games');
-  // Add round bets to pot
   const roundTotal = game.players.reduce((s,p)=>s+p.roundPaid,0);
   game.pot = (BigInt(game.pot||'0') + BigInt(roundTotal)).toString();
-  // Reset round bets
   game.players.forEach(p=>{p.roundPaid=0;p.acted=false;});
 
+  if ((game.gameType || 'poker') === 'sutda') {
+    await sdDoShowdown(db, game);
+    return;
+  }
+
   if (game.phase === 'bet1') {
-    // Draw 1 face-up card each
     game.players.forEach(p=>p.cards.push({...game.deck.pop(),faceUp:true}));
     mpStartNewBetRound(game, 1-game.setter);
     game.phase = 'bet2';
   } else if (game.phase === 'bet2') {
-    // Draw 1 face-down card each (7th card)
     game.players.forEach(p=>p.cards.push({...game.deck.pop(),faceUp:false}));
     mpStartNewBetRound(game, 1-game.setter);
     game.phase = 'bet3';
   } else if (game.phase === 'bet3') {
-    // Showdown
     await mpDoShowdown(db, game);
   }
 }
@@ -339,6 +357,149 @@ async function mpFinishGame(db, game, forceWinner) {
     {$set:{phase:game.phase,result:game.result,players:game.players,showdownResult:game.showdownResult,lastUpdate:new Date()}}
   );
 }
+
+async function mpDebitPlayer(db, player, amount) {
+  const amt = BigInt(amount || 0);
+  if (amt <= 0n) return 0n;
+  const have = BigInt(player.chips || '0');
+  const pay = amt > have ? have : amt;
+  player.chips = (have - pay).toString();
+  await db.collection('players').updateOne({ nickname: player.nickname }, { $set: { chips: player.chips } });
+  return pay;
+}
+
+async function sdDoShowdown(db, game) {
+  game.players.forEach(p => (p.cards || []).forEach(c => { c.faceUp = true; }));
+  const alive = game.players.filter(p => !p.folded);
+  if (alive.length === 1) {
+    const wi = game.players.indexOf(alive[0]);
+    game.phase = 'showdown';
+    game.showdownResult = { winner: wi, byFold: true, p0HandName: '폴드', p1HandName: '폴드' };
+    await mpFinishGame(db, game, wi);
+    return;
+  }
+  const e0 = kc.sutdaEval(game.players[0].cards);
+  const e1 = kc.sutdaEval(game.players[1].cards);
+  const cmp = kc.sutdaCompare(e0, e1);
+  game.showdownResult = {
+    winner: cmp === 1 ? 0 : cmp === -1 ? 1 : -1,
+    byFold: false,
+    p0HandName: e0.name, p1HandName: e1.name,
+    rematch: cmp === 'rematch',
+  };
+  if (cmp === 'rematch') {
+    game.deck = kc.createSutdaDeck();
+    game.players.forEach(p => {
+      p.cards = [game.deck.pop(), game.deck.pop()].map(c => ({ ...c, faceUp: false }));
+      p.folded = false; p.roundPaid = 0; p.acted = false;
+    });
+    mpStartNewBetRound(game, 1 - game.setter);
+    game.phase = 'bet1';
+    game.showdownResult.rematch = true;
+    return;
+  }
+  game.phase = 'showdown';
+  await mpFinishGame(db, game, game.showdownResult.winner);
+}
+
+function gsApplyResolve(game, pidx, played, drawn, playId, drawId) {
+  const beforePeok = new Set(game.peokMonths || []);
+  const r = kc.gostopResolve(game.field, played, drawn, playId, drawId);
+  game.field = r.field;
+  game.peokMonths = [...new Set(
+    r.field.filter((c, i, a) => a.filter(x => x.month === c.month).length >= 3).map(c => c.month)
+  )];
+  const p = game.players[pidx];
+  const op = game.players[1 - pidx];
+  let stealN = 0;
+  if (r.events.includes('쪽') || r.events.includes('따닥') || r.events.includes('싹쓸이')) stealN += 1;
+  const capMonths = new Set(r.captures.map(c => c.month));
+  for (const m of capMonths) {
+    if (beforePeok.has(m)) { stealN += 1; r.events.push('뻑보너스'); }
+  }
+  if (r.events.includes('뻑')) {
+    game.peokMade = (game.peokMade || 0) + 1;
+  }
+  if (stealN > 0) {
+    const st = kc.stealPiCards(op.captured || [], stealN);
+    op.captured = st.remain;
+    r.captures.push(...st.stolen);
+    if (st.stolen.length) r.events.push('피뺏기');
+  }
+  p.captured = (p.captured || []).concat(r.captures);
+  const sc = kc.gostopScore(p.captured);
+  p.score = sc.score;
+  game.lastEvents = r.events;
+  game.lastPlay = { pidx, played, drawn };
+  game.pending = null;
+
+  if ((game.peokMade || 0) >= 3) {
+    return { instantWin: pidx, reason: '쓰리뻑' };
+  }
+  const bothEmpty = game.players.every(pl => !(pl.hand || []).length);
+  if (bothEmpty) return { gameEnd: true };
+
+  if (sc.score >= 7 && sc.score > (p.scoreAtLastDecision || 0)) {
+    if (!(op.hand || []).length) return { gameEnd: true, stopper: pidx };
+    game.phase = 'go_stop';
+    game.goStopPlayer = pidx;
+    return { goStop: true };
+  }
+  game.actingPlayer = 1 - pidx;
+  game.phase = 'play';
+  return { next: true };
+}
+
+async function gsSettle(db, game, winnerIdx, reason) {
+  if (winnerIdx === -1) {
+    game.showdownResult = { winner: -1, reason: reason || '나가리' };
+    await mpFinishGame(db, game, -1);
+    return;
+  }
+  const w = game.players[winnerIdx];
+  const l = game.players[1 - winnerIdx];
+  const info = kc.gostopPayoutMult(w, l);
+  const ante = BigInt(game.baseBet || '1');
+  const payout = ante * BigInt(info.score) * BigInt(info.mult);
+  let extra = payout > ante ? payout - ante : 0n;
+  extra = await mpDebitPlayer(db, l, extra);
+  game.players[1 - winnerIdx] = l;
+  game.pot = (BigInt(game.pot || '0') + extra).toString();
+  game.showdownResult = {
+    winner: winnerIdx, reason: reason || '스톱',
+    score: info.score, mult: info.mult, parts: info.parts,
+    p0HandName: `점수 ${kc.gostopScore(game.players[0].captured).score}`,
+    p1HandName: `점수 ${kc.gostopScore(game.players[1].captured).score}`,
+  };
+  await mpFinishGame(db, game, winnerIdx);
+}
+
+async function gsEndByCards(db, game) {
+  const s0 = kc.gostopScore(game.players[0].captured).score;
+  const s1 = kc.gostopScore(game.players[1].captured).score;
+  if (s0 === s1) await gsSettle(db, game, -1, '나가리');
+  else await gsSettle(db, game, s0 > s1 ? 0 : 1, '종료');
+}
+
+async function gsAfterResolve(db, game, r) {
+  if (r.instantWin !== undefined) await gsSettle(db, game, r.instantWin, r.reason);
+  else if (r.gameEnd) {
+    if (r.stopper !== undefined) await gsSettle(db, game, r.stopper, '스톱');
+    else await gsEndByCards(db, game);
+  }
+}
+
+async function gsSaveGame(gCol, game) {
+  await gCol.updateOne({ gameId: game.gameId }, { $set: {
+    phase: game.phase, deck: game.deck, field: game.field, players: game.players,
+    pending: game.pending || null, peokMonths: game.peokMonths, peokMade: game.peokMade,
+    lastEvents: game.lastEvents, lastPlay: game.lastPlay, goStopPlayer: game.goStopPlayer,
+    actingPlayer: game.actingPlayer, pot: game.pot, showdownResult: game.showdownResult,
+    result: game.result, lastUpdate: new Date()
+  }});
+}
+
+
 
 
 
@@ -664,7 +825,7 @@ app.get('/api/mp', async (req, res) => {
           phase: { $ne: 'cleanup' }
         });
         if (newGame) return res.json(mpBuildGameView(newGame, newGame.players[0].nickname===nickname?0:1));
-        return res.json({ status: 'queued' });
+        return res.json({ status: 'queued', gameType: inQueue.gameType || 'poker' });
       }
       return res.json({ status: 'idle' });
     }
@@ -686,19 +847,22 @@ app.post('/api/mp', async (req, res) => {
 
     // ── queue ──────────────────────────────────────────────────────────────
     if (action === 'queue') {
+      const gameType = ['poker','sutda','gostop'].includes(body.gameType) ? body.gameType : 'poker';
       const existGame = await gCol.findOne({
         $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
         phase:{$ne:'cleanup'}
       });
-      if (existGame) return res.status(400).json({ error: '이미 게임 중' });
+      if (existGame) return res.json(mpBuildGameView(existGame, existGame.players[0].nickname===nickname?0:1));
       const existQ = await qCol.findOne({ nickname });
       if (!existQ) {
         const chipsNum = Number(BigInt(me.chips||'10') > 9007199254740991n ? 9007199254740991n : BigInt(me.chips||'10'));
-        await qCol.insertOne({ nickname, token, chips: me.chips||'10', chips_num: chipsNum, createdAt: new Date() });
+        await qCol.insertOne({ nickname, token, chips: me.chips||'10', chips_num: chipsNum, gameType, createdAt: new Date() });
+      } else if (existQ.gameType !== gameType) {
+        await qCol.updateOne({ nickname }, { $set: { gameType } });
       }
       const game = await mpTryMatch(db);
       if (game) return res.json(mpBuildGameView(game, game.players[0].nickname===nickname?0:1));
-      return res.json({ status: 'queued' });
+      return res.json({ status: 'queued', gameType });
     }
 
     // ── cancel_queue ────────────────────────────────────────────────────────
@@ -714,34 +878,67 @@ app.post('/api/mp', async (req, res) => {
       const pidx = game.players[0].nickname===nickname?0:1;
       if (game.setter !== pidx) return res.status(400).json({ error: '권한 없음' });
 
-      // baseBet is derived from minChips/50, minimum 1000
       const minChips = cmpBigStr(game.players[0].chips, game.players[1].chips) <= 0
         ? BigInt(game.players[0].chips) : BigInt(game.players[1].chips);
       const rawBet = minChips / 50n > 0n ? minChips / 50n : 1n;
-      const baseBet = rawBet < 1000n ? 1000n : rawBet;
+      let payAnte = rawBet < 1000n ? 1000n : rawBet;
+      if (payAnte > minChips) payAnte = minChips > 0n ? minChips : 1n;
 
-      // Both players pay the ante (baseBet each)
       const p0 = await db.collection('players').findOne({nickname:game.players[0].nickname});
       const p1 = await db.collection('players').findOne({nickname:game.players[1].nickname});
-      const new0 = (BigInt(p0.chips||'0')-baseBet).toString();
-      const new1 = (BigInt(p1.chips||'0')-baseBet).toString();
+      const new0 = (BigInt(p0.chips||'0')-payAnte).toString();
+      const new1 = (BigInt(p1.chips||'0')-payAnte).toString();
       await db.collection('players').updateOne({nickname:game.players[0].nickname},{$set:{chips:new0}});
       await db.collection('players').updateOne({nickname:game.players[1].nickname},{$set:{chips:new1}});
       game.players[0].chips = new0; game.players[1].chips = new1;
-      game.baseBet = baseBet.toString();
-      game.pot = (baseBet*2n).toString();
+      game.baseBet = payAnte.toString();
+      game.pot = (payAnte*2n).toString();
 
-      // Deal 4 cards to each player
-      game.deck = mpCreateDeck();
-      game.players.forEach(p => {
-        p.cards = [];
-        for (let i=0;i<4;i++) p.cards.push({...game.deck.pop(), faceUp:false});
-      });
-      game.phase = 'discard';
-      game.players.forEach(p => { p.folded=false; p.roundPaid=0; p.acted=false; });
+      const gt = game.gameType || 'poker';
+      game.players.forEach(p => { p.folded=false; p.roundPaid=0; p.acted=false; p.captured=[]; p.goCount=0; p.score=0; p.scoreAtLastDecision=0; });
+
+      if (gt === 'sutda') {
+        game.deck = kc.createSutdaDeck();
+        game.players.forEach(p => {
+          p.cards = [game.deck.pop(), game.deck.pop()].map(c => ({ ...c, faceUp: false }));
+        });
+        mpStartNewBetRound(game, 1 - game.setter);
+        game.phase = 'bet1';
+      } else if (gt === 'gostop') {
+        const dealt = kc.gostopDeal();
+        game.deck = dealt.deck;
+        game.field = dealt.field;
+        game.players[0].hand = dealt.hands[0];
+        game.players[1].hand = dealt.hands[1];
+        game.players[0].captured = [];
+        game.players[1].captured = [];
+        game.players[0].shook = kc.shakeMonths(game.players[0].hand).length > 0;
+        game.players[1].shook = kc.shakeMonths(game.players[1].hand).length > 0;
+        game.actingPlayer = 1 - game.setter;
+        game.phase = 'play';
+        game.peokMonths = [];
+        game.peokMade = 0;
+        if (kc.fourOfKind(game.players[0].hand)) {
+          await gsSettle(db, game, 0, '총통');
+          return res.json(mpBuildGameView(game, pidx));
+        }
+        if (kc.fourOfKind(game.players[1].hand)) {
+          await gsSettle(db, game, 1, '총통');
+          return res.json(mpBuildGameView(game, pidx));
+        }
+      } else {
+        game.deck = mpCreateDeck();
+        game.players.forEach(p => {
+          p.cards = [];
+          for (let i=0;i<4;i++) p.cards.push({...game.deck.pop(), faceUp:false});
+        });
+        game.phase = 'discard';
+      }
       await gCol.updateOne({gameId:game.gameId},{$set:{
-        baseBet:game.baseBet, pot:game.pot, phase:game.phase,
-        deck:game.deck, players:game.players, lastUpdate:new Date()
+        baseBet:game.baseBet, pot:game.pot, phase:game.phase, gameType: gt,
+        deck:game.deck, field:game.field||[], players:game.players,
+        actingPlayer:game.actingPlayer, roundHighBet:game.roundHighBet,
+        peokMonths:game.peokMonths||[], lastUpdate:new Date()
       }});
       return res.json(mpBuildGameView(game, pidx));
     }
@@ -819,12 +1016,16 @@ app.post('/api/mp', async (req, res) => {
         if (mpCheckBetRoundDone(game)) await mpAdvanceAfterBet(db, game);
         else game.actingPlayer = 1-pidx;
       } else if (betAct === 'call') {
+        const need = (game.roundHighBet || 0) - (p.roundPaid || 0);
+        await mpDebitPlayer(db, p, need);
         p.roundPaid = game.roundHighBet;
         p.acted = true;
         if (mpCheckBetRoundDone(game)) await mpAdvanceAfterBet(db, game);
         else game.actingPlayer = 1-pidx;
       } else if (betAct === 'raise') {
         const totalBet = game.roundHighBet + raiseAmt;
+        const need = totalBet - (p.roundPaid || 0);
+        await mpDebitPlayer(db, p, need);
         p.roundPaid = totalBet;
         game.roundHighBet = totalBet;
         p.acted = true; op.acted = false;
@@ -840,6 +1041,92 @@ app.post('/api/mp', async (req, res) => {
         result:game.result, lastUpdate:new Date()
       }});
       return res.json(mpBuildGameView(game, pidx));
+    }
+
+    // ── 고스톱: 손패 내기 ────────────────────────────────────────────────
+    if (action === 'gs_play') {
+      const game = await gCol.findOne({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase:'play', gameType:'gostop'
+      });
+      if (!game) return res.status(400).json({ error: '낼 수 없음' });
+      const pidx = game.players[0].nickname===nickname?0:1;
+      if (game.actingPlayer !== pidx) return res.status(400).json({ error: '상대 차례' });
+      if (game.pending) return res.status(400).json({ error: '바닥패를 선택하세요' });
+      const p = game.players[pidx];
+      const handIdx = parseInt(body.handIdx);
+      if (isNaN(handIdx) || handIdx < 0 || handIdx >= (p.hand||[]).length)
+        return res.status(400).json({ error: '카드 없음' });
+      if (!(game.deck||[]).length) return res.status(400).json({ error: '덱 없음' });
+      const played = p.hand.splice(handIdx, 1)[0];
+      const drawn = game.deck.pop();
+      if (played.month !== drawn.month) {
+        const playOpts = kc.monthOnField(game.field, played.month);
+        const drawOpts = kc.monthOnField(game.field, drawn.month);
+        const playNeed = playOpts.length === 2;
+        const drawNeed = drawOpts.length === 2;
+        if (playNeed || drawNeed) {
+          game.pending = {
+            pidx, played, drawn,
+            playOptions: playNeed ? playOpts.map(c => c.id) : null,
+            drawOptions: drawNeed ? drawOpts.map(c => c.id) : null,
+          };
+          await gsSaveGame(gCol, game);
+          return res.json(mpBuildGameView(game, pidx));
+        }
+      }
+      const r = gsApplyResolve(game, pidx, played, drawn, null, null);
+      await gsAfterResolve(db, game, r);
+      await gsSaveGame(gCol, game);
+      return res.json(mpBuildGameView(game, pidx));
+    }
+
+    if (action === 'gs_choose') {
+      const game = await gCol.findOne({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        gameType:'gostop', phase:'play'
+      });
+      if (!game || !game.pending) return res.status(400).json({ error: '선택 없음' });
+      const pidx = game.players[0].nickname===nickname?0:1;
+      if (game.pending.pidx !== pidx) return res.status(400).json({ error: '상대 차례' });
+      const playId = body.playId || null;
+      const drawId = body.drawId || null;
+      if (game.pending.playOptions && !game.pending.playOptions.includes(playId))
+        return res.status(400).json({ error: '낸 패와 같은 월의 바닥패를 고르세요' });
+      if (game.pending.drawOptions && !game.pending.drawOptions.includes(drawId))
+        return res.status(400).json({ error: '뒤집은 패와 같은 월의 바닥패를 고르세요' });
+      const { played, drawn } = game.pending;
+      const r = gsApplyResolve(game, pidx, played, drawn, playId, drawId);
+      await gsAfterResolve(db, game, r);
+      await gsSaveGame(gCol, game);
+      return res.json(mpBuildGameView(game, pidx));
+    }
+
+    if (action === 'gs_gostop') {
+      const game = await gCol.findOne({
+        $or:[{'players.0.nickname':nickname},{'players.1.nickname':nickname}],
+        phase:'go_stop', gameType:'gostop'
+      });
+      if (!game) return res.status(400).json({ error: '고/스톱 아님' });
+      const pidx = game.players[0].nickname===nickname?0:1;
+      if (game.goStopPlayer !== pidx) return res.status(400).json({ error: '상대 차례' });
+      const p = game.players[pidx];
+      if (body.decision === 'go') {
+        p.goCount = (p.goCount || 0) + 1;
+        p.scoreAtLastDecision = kc.gostopScore(p.captured).score;
+        game.phase = 'play';
+        game.actingPlayer = 1 - pidx;
+        game.goStopPlayer = null;
+        game.lastEvents = ['고!'];
+        await gsSaveGame(gCol, game);
+        return res.json(mpBuildGameView(game, pidx));
+      }
+      if (body.decision === 'stop') {
+        await gsSettle(db, game, pidx, '스톱');
+        await gsSaveGame(gCol, game);
+        return res.json(mpBuildGameView(game, pidx));
+      }
+      return res.status(400).json({ error: 'go 또는 stop' });
     }
 
     // ── leave ──────────────────────────────────────────────────────────────

@@ -287,8 +287,19 @@ function sfxTabSwitch(){_tone(680,'sine',.1,.07)}
 // ── Card SVG ─────────────────────────────────
 const suits=['♠','♥','♦','♣'],ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 const suitColors={'♠':'#111','♣':'#111','♥':'#d32f2f','♦':'#d32f2f'};
-function createCardSVG(card){const c=suitColors[card.suit];return`<svg viewBox="0 0 120 168" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="168" rx="8" fill="white" stroke="#ccc" stroke-width="1.5"/><text x="10" y="30" font-size="22" font-weight="bold" fill="${c}">${card.rank}</text><text x="10" y="53" font-size="26" fill="${c}">${card.suit}</text><text x="60" y="95" font-size="44" fill="${c}" text-anchor="middle">${card.suit}</text><text x="110" y="163" font-size="22" font-weight="bold" fill="${c}" text-anchor="end" transform="rotate(180 110 148)">${card.rank}</text><text x="110" y="138" font-size="26" fill="${c}" text-anchor="end" transform="rotate(180 110 123)">${card.suit}</text></svg>`}
-function cardBackSVG(){return`<svg viewBox="0 0 120 168" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="168" rx="8" fill="#1a237e" stroke="#333" stroke-width="2"/><rect x="8" y="8" width="104" height="152" rx="6" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/><text x="60" y="97" text-anchor="middle" font-size="50" fill="rgba(255,255,255,.12)">🂠</text><line x1="14" y1="14" x2="106" y2="154" stroke="rgba(255,255,255,.07)" stroke-width="1"/><line x1="106" y1="14" x2="14" y2="154" stroke="rgba(255,255,255,.07)" stroke-width="1"/></svg>`}
+function pokerCardSrc(card){
+  if(!card||card.faceUp===false) return './img/cards/back.svg';
+  const s={'♠':'s','♥':'h','♦':'d','♣':'c'}[card.suit];
+  if(!s||!card.rank) return './img/cards/back.svg';
+  const r=card.rank==='10'?'T':card.rank;
+  return `./img/cards/${r}${s}.svg`;
+}
+function createCardSVG(card){
+  return `<img class="playing-card-img" src="${pokerCardSrc({...card,faceUp:true})}" alt="${card.rank||''}${card.suit||''}" draggable="false">`;
+}
+function cardBackSVG(){
+  return `<img class="playing-card-img" src="./img/cards/back.svg" alt="뒷면" draggable="false">`;
+}
 function cardBackSmallSVG(){return cardBackSVG()}
 
 // ── Hand evaluation ──────────────────────────

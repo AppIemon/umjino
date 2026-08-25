@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350" width="250" height="350">
+  <defs>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-opacity=".18"/>
+    </filter>
+  </defs>
+  <rect x="1" y="1" width="248" height="348" rx="18" fill="#f7f3ea" stroke="#1a1a1a" stroke-width="2"/>
+  <rect x="10" y="10" width="230" height="330" rx="12" fill="#fffef8" stroke="#e0d8c8" stroke-width="1"/>
+  <text x="22" y="42" font-size="32" font-weight="700" fill="#111111" font-family="Georgia,serif">5</text>
+  <text x="22" y="72" font-size="26" fill="#111111">♠</text>
+  <text x="228" y="318" font-size="32" font-weight="700" fill="#111111" font-family="Georgia,serif" text-anchor="end" transform="rotate(180 228 308)">5</text>
+  <text x="228" y="288" font-size="26" fill="#111111" text-anchor="end" transform="rotate(180 228 278)">♠</text>
+  <text x="78" y="90" text-anchor="middle" font-size="36" fill="#111111" font-family="Georgia,serif">♠</text><text x="172" y="90" text-anchor="middle" font-size="36" fill="#111111" font-family="Georgia,serif">♠</text><text x="125" y="175" text-anchor="middle" font-size="36" fill="#111111" font-family="Georgia,serif">♠</text><text x="78" y="260" text-anchor="middle" font-size="36" fill="#111111" font-family="Georgia,serif" transform="rotate(180 78 260)">♠</text><text x="172" y="260" text-anchor="middle" font-size="36" fill="#111111" font-family="Georgia,serif" transform="rotate(180 172 260)">♠</text>
+</svg>

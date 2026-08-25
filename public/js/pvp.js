@@ -5,6 +5,22 @@
 
 const MP_API = '/api/mp';
 let mpPollTimer = null, mpLastState = null;
+let mpSelectedGame = 'poker';
+
+const MP_GAMES = {
+  poker: {
+    id: 'poker', name: '세븐포커', emoji: '🃏',
+    blurb: '4장 배분 → 1장 버리기 → 3차 베팅 → 7장 중 최선 5장',
+  },
+  sutda: {
+    id: 'sutda', name: '섯다', emoji: '🎴',
+    blurb: '화투 20장 · 2장으로 족보 승부 · 광땡/땡/알리',
+  },
+  gostop: {
+    id: 'gostop', name: '고스톱', emoji: '🌺',
+    blurb: '2인 맞고 · 바닥패 맞추기 · 7점 고/스톱',
+  },
+};
 
 function mpFetch(action, extra) {
   return fetchT(MP_API + '?action=' + action, {
@@ -39,45 +55,30 @@ function mpHandleState(d) {
     return;
   }
   if (d.status === 'queued') return;
-  if (d.status === 'game_over') { mpStopPolling(); mpShowGameOver(d); return; }
+  if (d.status === 'game_over') {
+    mpStopPolling();
+    if (d.gameType === 'gostop' && typeof gsShowGameOver === 'function') gsShowGameOver(d);
+    else if (d.gameType === 'sutda' && typeof sdShowGameOver === 'function') sdShowGameOver(d);
+    else mpShowGameOver(d);
+    return;
+  }
   if (d.status === 'in_game') {
     content.style.display = 'none';
     area.style.display = 'block';
-    mpRenderGame(d);
     mpLastState = d;
+    if (d.gameType === 'gostop' && typeof gsRender === 'function') gsRender(d);
+    else if (d.gameType === 'sutda' && typeof sdRender === 'function') sdRender(d);
+    else mpRenderGame(d);
   }
 }
 
-// ── 카드 SVG ──────────────────────────────
 function mpCardSVG(card, w, h, isOwner) {
   if (!card) return '';
-  const W = 80, H = 112;
-  if (!card.faceUp) {
-    if (isOwner) {
-      const tc = {'♠':'#aaaaff','♣':'#aaaaff','♥':'#ffaaaa','♦':'#ffaaaa'}[card.suit]||'#aaa';
-      return `<svg viewBox="0 0 ${W} ${H}" style="width:${w};height:${h};border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.5);opacity:.7">
-<rect width="${W}" height="${H}" rx="6" fill="#1a1a4a" stroke="#444"/>
-<text x="6" y="18" font-size="12" font-weight="bold" fill="${tc}">${card.rank}</text>
-<text x="6" y="30" font-size="13" fill="${tc}">${card.suit}</text>
-<text x="${W/2}" y="${H/2+5}" font-size="22" fill="${tc}" text-anchor="middle">${card.suit}</text>
-<rect width="${W}" height="${H}" rx="6" fill="rgba(0,0,0,.35)"/>
-<text x="${W/2}" y="${H/2+5}" text-anchor="middle" font-size="10" fill="rgba(255,255,255,.4)">🔒</text>
-</svg>`;
-    }
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:${w};height:${h};border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.5)">
-<rect width="${W}" height="${H}" rx="6" fill="#1a237e" stroke="#333"/>
-<rect x="5" y="5" width="${W-10}" height="${H-10}" rx="4" fill="none" stroke="rgba(255,255,255,.12)"/>
-<text x="${W/2}" y="${H/2+10}" text-anchor="middle" font-size="28" fill="rgba(255,255,255,.12)">🂠</text>
-</svg>`;
-  }
-  const c = {'♠':'#111','♣':'#111','♥':'#d32f2f','♦':'#d32f2f'}[card.suit];
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:${w};height:${h};border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">
-<rect width="${W}" height="${H}" rx="6" fill="white" stroke="#ddd"/>
-<text x="5" y="17" font-size="12" font-weight="bold" fill="${c}">${card.rank}</text>
-<text x="5" y="29" font-size="13" fill="${c}">${card.suit}</text>
-<text x="${W/2}" y="${H/2+8}" font-size="26" fill="${c}" text-anchor="middle">${card.suit}</text>
-<text x="${W-5}" y="${H-4}" font-size="12" font-weight="bold" fill="${c}" text-anchor="end" transform="rotate(180 ${W-5} ${H-4})">${card.rank}</text>
-</svg>`;
+  const showFace = card.faceUp || (isOwner && card.suit);
+  const src = showFace ? pokerCardSrc({ ...card, faceUp: true }) : './img/cards/back.svg';
+  const op = (!card.faceUp && isOwner && card.suit) ? 'opacity:.78;filter:brightness(.85)' : '';
+  return `<img class="playing-card-img" src="${src}" alt="" draggable="false"
+    style="width:${w};height:${h};${op}">`;
 }
 
 function mpCardsRow(cards, w, h, discardable, selectedIdx, isOwner) {
@@ -256,8 +257,10 @@ function mpShowGameOver(d) {
   const msg = isWin ? '🎉 승리!' : isTie ? '🤝 무승부' : '😢 패배';
   const pot = d.stakeAmount ? shortFmt(BigInt(d.stakeAmount)) + '칩' : '?';
   const sr = d.showdownResult || mpLastState?.showdownResult;
-  const handInfo = sr && !sr.byFold && sr.p0HandName
-    ? `<div class="pvp-hand-info">나: ${sr.p0HandName} / 상대: ${sr.p1HandName}</div>`
+  const myName = d.myHandName || sr?.p0HandName;
+  const opName = d.opHandName || sr?.p1HandName;
+  const handInfo = sr && !sr.byFold && (myName || opName)
+    ? `<div class="pvp-hand-info">나: ${myName||'-'} / 상대: ${opName||'-'}</div>`
     : sr?.byFold ? `<div class="pvp-hand-info">폴드로 종료</div>` : '';
   const myCards = (d.myCards || mpLastState?.myCards || []).map(c=>({...c,faceUp:true}));
   const opCards = (d.opCards || mpLastState?.opCards || []).map(c=>({...c,faceUp:true}));
@@ -284,16 +287,52 @@ function mpShowGameOver(d) {
 }
 
 // ── 대기실 ────────────────────────────────
+function mpLobbyHTML() {
+  const games = Object.values(MP_GAMES).map(g => `
+    <button class="mp-pick-card${mpSelectedGame===g.id?' selected':''}" onclick="mpSelectGame('${g.id}')">
+      <div class="mp-pick-emoji">${g.emoji}</div>
+      <div class="mp-pick-name">${g.name}</div>
+      <div class="mp-pick-blurb">${g.blurb}</div>
+    </button>`).join('');
+  const cur = MP_GAMES[mpSelectedGame] || MP_GAMES.poker;
+  return `<div class="mp-lobby">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem">
+      <h2 style="color:#f1c40f;margin:0">⚔️ 멀티플레이</h2>
+      <button class="game-help-btn" onclick="showGameHelp('${mpSelectedGame==='poker'?'pvp':mpSelectedGame}')" title="설명서">?</button>
+    </div>
+    <p style="color:#888;font-size:.8rem;margin-bottom:.9rem">1:1 실시간 대전 · 게임별로 따로 매칭됩니다</p>
+    <div class="mp-pick-grid">${games}</div>
+    <p style="color:#aaa;font-size:.82rem;margin:1rem 0 .9rem">${cur.blurb}</p>
+    <button class="btn-primary" onclick="mpJoinQueue()">▶ ${cur.name} 매칭</button>
+  </div>`;
+}
+
+function mpSelectGame(id) {
+  mpSelectedGame = id;
+  const content = document.getElementById('pvpContent');
+  if (content && content.style.display !== 'none') content.innerHTML = mpLobbyHTML();
+}
+
+function mpShowLobby() {
+  const area = document.getElementById('pvpGameArea');
+  const content = document.getElementById('pvpContent');
+  if (!content) return;
+  if (area) area.style.display = 'none';
+  content.style.display = 'block';
+  content.innerHTML = mpLobbyHTML();
+}
+
 async function mpJoinQueue() {
   if (!sessionNickname) { document.getElementById('authModal').classList.add('show'); return; }
   const content = document.getElementById('pvpContent');
+  const g = MP_GAMES[mpSelectedGame] || MP_GAMES.poker;
   content.innerHTML = `<div class="pvp-queue-box">
     <div class="loading-spinner" style="margin:0 auto 1rem"></div>
-    <p style="color:#f1c40f">매칭 대기 중...</p>
+    <p style="color:#f1c40f">${g.emoji} ${g.name} 매칭 대기 중...</p>
     <button class="pvp-btn secondary" onclick="mpCancelQueue()" style="margin-top:.8rem">취소</button>
   </div>`;
   try {
-    const res = await mpFetch('queue');
+    const res = await mpFetch('queue', { gameType: mpSelectedGame });
     const d = await res.json();
     if (!res.ok) {
       content.innerHTML = `<p style="color:#e74c3c">${escHtml(d.error||'오류')}</p><button class="pvp-btn primary" onclick="mpJoinQueue()">다시 시도</button>`;
@@ -309,16 +348,12 @@ async function mpJoinQueue() {
 async function mpCancelQueue() {
   mpStopPolling();
   try { await mpFetch('cancel_queue'); } catch(e) {}
-  document.getElementById('pvpContent').innerHTML = `<p style="color:#aaa;margin-bottom:.9rem">취소됨</p><button class="pvp-btn primary" onclick="mpJoinQueue()">다시 매칭</button>`;
+  mpShowLobby();
 }
 
 function mpExit() {
   mpStopPolling(); mpLastState = null; _discardSelected = null;
-  const area = document.getElementById('pvpGameArea');
-  const content = document.getElementById('pvpContent');
-  area.style.display = 'none';
-  content.style.display = 'block';
-  content.innerHTML = `<p style="color:#aaa;margin-bottom:.9rem">실시간 1:1 세븐 포커</p><button class="pvp-btn primary" onclick="mpJoinQueue()">매칭 시작</button>`;
+  mpShowLobby();
 }
 
 window.addEventListener('beforeunload', () => {
@@ -326,3 +361,5 @@ window.addEventListener('beforeunload', () => {
     try { navigator.sendBeacon(MP_API+'?action=leave', new Blob([JSON.stringify({nickname:sessionNickname,token:sessionToken})],{type:'application/json'})); } catch(e) {}
   }
 });
+
+if (document.getElementById('pvpContent')) mpShowLobby();

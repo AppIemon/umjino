@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350" width="250" height="350">
+  <rect x="1" y="1" width="248" height="348" rx="18" fill="#0d1b4c" stroke="#050a1a" stroke-width="2"/>
+  <rect x="14" y="14" width="222" height="322" rx="12" fill="none" stroke="#c9a227" stroke-width="2"/>
+  <rect x="24" y="24" width="202" height="302" rx="8" fill="#152a6e"/>
+  <pattern id="diam" width="20" height="20" patternUnits="userSpaceOnUse">
+    <path d="M10 0 L20 10 L10 20 L0 10 Z" fill="none" stroke="#c9a227" stroke-width=".6" opacity=".45"/>
+  </pattern>
+  <rect x="24" y="24" width="202" height="302" rx="8" fill="url(#diam)"/>
+  <circle cx="125" cy="175" r="42" fill="#0d1b4c" stroke="#c9a227" stroke-width="2"/>
+  <text x="125" y="188" text-anchor="middle" font-size="36" fill="#c9a227">🂠</text>
+</svg>
