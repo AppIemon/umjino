@@ -44,6 +44,8 @@
     <button class="nav-sub-btn" data-tab="roulette" onclick="switchTab('roulette')">🎡 룰렛</button>
     <button class="nav-sub-btn" data-tab="slot" onclick="switchTab('slot')">🎰 슬롯</button>
     <button class="nav-sub-btn" data-tab="pvp" onclick="switchTab('pvp')">⚔️ 멀티</button>
+    <button class="nav-sub-btn" data-tab="seotda" onclick="switchTab('seotda')">🎴 섯다</button>
+    <button class="nav-sub-btn" data-tab="gostop" onclick="switchTab('gostop')">🌸 고스톱</button>
     <button class="nav-sub-btn" data-tab="toto" onclick="switchTab('toto')">🏇 토토</button>
     <button class="nav-sub-btn" data-tab="dice" onclick="switchTab('dice')">🎲 주사위</button>
     <button class="nav-sub-btn" data-tab="yacht" onclick="switchTab('yacht')">🎳 요트</button>
@@ -177,6 +179,20 @@
       <div id="pvpActionArea" style="text-align:center;margin-top:.4rem"></div>
       <div id="pvpStatus" style="text-align:center;color:#888;font-size:.8rem;margin-top:.35rem"></div>
     </div>
+  </div>
+</div>
+
+<!-- SEOTDA (멀티 전용) -->
+<div class="tab-page" id="tabSeotda">
+  <div class="hw-wrap" style="position:relative"><button class="game-help-btn" onclick="showGameHelp('seotda')" title="설명서">?</button>
+    <div id="seotdaContent"><div class="toto-loading">섯다 탭을 선택하세요</div></div>
+  </div>
+</div>
+
+<!-- GOSTOP (멀티 전용) -->
+<div class="tab-page" id="tabGostop">
+  <div class="hw-wrap" style="position:relative"><button class="game-help-btn" onclick="showGameHelp('gostop')" title="설명서">?</button>
+    <div id="gostopContent"><div class="toto-loading">고스톱 탭을 선택하세요</div></div>
   </div>
 </div>
 
@@ -341,6 +357,9 @@
 <script src="./js/slot.js"></script>
 <script src="./js/stickman.js"></script>
 <script src="./js/pvp.js"></script>
+<script src="./js/hwatu.js"></script>
+<script src="./js/seotda.js"></script>
+<script src="./js/gostop.js"></script>
 <script src="./js/dm.js"></script>
 <script src="./js/toto.js"></script>
 <script src="./js/dice.js"></script>
@@ -349,13 +368,13 @@
 <script>
 // Prevent context menu on game elements (stops long-press text selection on mobile)
 document.addEventListener('contextmenu', e=>{
-  if(e.target.closest('.card,.mp-card,.mp-op-card,.chip-stack,.betting-zone,.rl-cell,.rl-outside-cell,.slot-grid'))
+  if(e.target.closest('.card,.mp-card,.mp-op-card,.hw-card,.hw-field,.chip-stack,.betting-zone,.rl-cell,.rl-outside-cell,.slot-grid'))
     e.preventDefault();
 });
 // Prevent text selection on touch
 document.addEventListener('selectstart', e=>{
   const el=e.target?.nodeType===1?e.target:e.target?.parentElement;
-  if(el?.closest('.card,.mp-card,.mp-op-card,.chip-stack,.main-area,.slot-grid'))
+  if(el?.closest('.card,.mp-card,.mp-op-card,.hw-card,.hw-table,.chip-stack,.main-area,.slot-grid'))
     e.preventDefault();
 });
 document.addEventListener('keydown', e=>{
@@ -365,6 +384,9 @@ window.addEventListener('beforeunload', ()=>{
   if(!sessionNickname||!sessionToken) return;
   if(mpPollTimer) try{navigator.sendBeacon('/api/mp?action=leave', new Blob([JSON.stringify({nickname:sessionNickname,token:sessionToken})],{type:'application/json'}))}catch(e){}
   if(rlPollTimer) try{navigator.sendBeacon('/api/roulette?action=leave', new Blob([JSON.stringify({nickname:sessionNickname,token:sessionToken})],{type:'application/json'}))}catch(e){}
+  const hwBeacon=u=>{try{navigator.sendBeacon(u, new Blob([JSON.stringify({nickname:sessionNickname,token:sessionToken})],{type:'application/json'}))}catch(e){}};
+  if(typeof sdPollTimer!=='undefined'&&sdPollTimer) hwBeacon('/api/seotda?action=leave');
+  if(typeof gsPollTimer!=='undefined'&&gsPollTimer) hwBeacon('/api/gostop?action=leave');
 });
 
 (async function init(){

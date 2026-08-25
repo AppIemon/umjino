@@ -997,6 +997,837 @@ app.post('/api/presence', async (req, res) => {
   } catch(e) { res.json({ online: [] }); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 화투(花鬪) 멀티플레이 전용 게임 — 섯다 / 고스톱
+//  · 두 게임 모두 1:1 실시간 매칭 전용이며 싱글 플레이 모드가 없다.
+//  · 매칭 시 양쪽에서 stake(에스크로)를 즉시 차감하고, 정산 때 되돌려준다.
+//    → 중간에 접속을 끊어도 칩이 복제되거나 증발하지 않는다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const HW_MONTH_NAME = ['', '송학', '매조', '벚꽃', '흑싸리', '난초', '모란',
+                       '홍싸리', '공산', '국화', '단풍', '오동', '비'];
+const HW_MONTH_FLOWER = ['', '🌾', '🐦', '🌸', '🍃', '🌿', '🦋',
+                         '🐗', '🌕', '🌼', '🍁', '🐤', '☔'];
+
+// kind: gwang(광) / yeol(열끗) / tti(띠) / pi(피)
+// sub : 띠 종류 hong(홍단) / cheong(청단) / cho(초단) / bi(비띠)
+// pi  : 피 점수(쌍피는 2)
+// godori: 고도리 3종(2·4·8월 열끗)
+const HW_DECK_DEF = [
+  [1,  ['gwang'], ['tti','hong'], ['pi'], ['pi']],
+  [2,  ['yeol','godori'], ['tti','hong'], ['pi'], ['pi']],
+  [3,  ['gwang'], ['tti','hong'], ['pi'], ['pi']],
+  [4,  ['yeol','godori'], ['tti','cho'], ['pi'], ['pi']],
+  [5,  ['yeol'], ['tti','cho'], ['pi'], ['pi']],
+  [6,  ['yeol'], ['tti','cheong'], ['pi'], ['pi']],
+  [7,  ['yeol'], ['tti','cho'], ['pi'], ['pi']],
+  [8,  ['gwang'], ['yeol','godori'], ['pi'], ['pi']],
+  [9,  ['yeol'], ['tti','cheong'], ['pi'], ['pi']],
+  [10, ['yeol'], ['tti','cheong'], ['pi'], ['pi']],
+  [11, ['gwang'], ['ssangpi'], ['pi'], ['pi']],
+  [12, ['gwang'], ['yeol'], ['tti','bi'], ['ssangpi']],
+];
+
+function hwBuildDeck() {
+  const deck = [];
+  for (const row of HW_DECK_DEF) {
+    const m = row[0];
+    for (let i = 1; i < row.length; i++) {
+      const [k, extra] = row[i];
+      const c = { id: `${m}-${i - 1}`, m, name: HW_MONTH_NAME[m] };
+      if (k === 'gwang')       { c.kind = 'gwang'; if (m === 12) c.bi = true; }
+      else if (k === 'yeol')   { c.kind = 'yeol'; if (extra === 'godori') c.godori = true; }
+      else if (k === 'tti')    { c.kind = 'tti'; c.sub = extra; }
+      else if (k === 'ssangpi'){ c.kind = 'pi'; c.pi = 2; }
+      else                     { c.kind = 'pi'; c.pi = 1; }
+      deck.push(c);
+    }
+  }
+  return deck;
+}
+
+function hwShuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// 에스크로 계산: 두 플레이어 중 적은 쪽 잔액 기준
+function hwCalcStake(chipsA, chipsB) {
+  const min = cmpBigStr(chipsA, chipsB) <= 0 ? BigInt(chipsA || '0') : BigInt(chipsB || '0');
+  let stake = min / 10n;
+  if (stake < 1000n) stake = min < 1000n ? min : 1000n;
+  if (stake < 1n) stake = 0n;
+  return stake;
+}
+
+// 플레이어 칩 증감 (음수 가능, 0 미만으로는 내려가지 않음)
+async function hwAddChips(db, nickname, delta) {
+  const col = db.collection('players');
+  const p = await col.findOne({ nickname });
+  if (!p) return null;
+  let next = BigInt(p.chips || '0') + delta;
+  if (next < 0n) next = 0n;
+  const nextStr = next.toString();
+  const set = { chips: nextStr };
+  if (cmpBigStr(nextStr, p.stats?.maxChips || '0') > 0) set['stats.maxChips'] = nextStr;
+  await col.updateOne({ nickname }, { $set: set });
+  return nextStr;
+}
+
+// 공용 1:1 매칭 (queue 컬렉션 → game 문서 생성)
+async function hwTryMatch(db, qName, gName, buildGame) {
+  const qCol = db.collection(qName);
+  const queue = await qCol.find({}).sort({ createdAt: 1 }).limit(2).toArray();
+  if (queue.length < 2) return null;
+  const [a, b] = queue;
+  const del = await qCol.deleteMany({ _id: { $in: [a._id, b._id] } });
+  if (del.deletedCount < 2) return null;      // 동시 매칭 방지
+  const pa = await db.collection('players').findOne({ nickname: a.nickname });
+  const pb = await db.collection('players').findOne({ nickname: b.nickname });
+  if (!pa || !pb) return null;
+  const game = buildGame(pa, pb, a, b);
+  await db.collection(gName).insertOne(game);
+  return game;
+}
+
+async function hwFindGame(db, gName, nickname) {
+  return db.collection(gName).findOne({
+    $or: [{ 'players.0.nickname': nickname }, { 'players.1.nickname': nickname }],
+    phase: { $ne: 'cleanup' },
+  });
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// 섯다 (Seotda) — 1:1 전용
+//   ante → bet1(1장) → bet2(2장) → showdown
+// ───────────────────────────────────────────────────────────────────────────
+
+// 섯다 덱: 1~10월 각 2장(20장). 48장 덱의 앞 두 장을 쓰므로 1·3·8월 첫 장이 광이 된다.
+// 카드 모양 정보(kind/sub)를 그대로 물려받아 클라이언트가 고스톱과 같은 이미지를 쓴다.
+function sdCreateDeck() {
+  const full = hwBuildDeck();
+  const d = [];
+  for (let m = 1; m <= 10; m++) {
+    full.filter(c => c.m === m).slice(0, 2).forEach((c, i) => {
+      d.push({ ...c, idx: i, gwang: c.kind === 'gwang' });
+    });
+  }
+  return hwShuffle(d);
+}
+
+const SD_SPECIAL = {
+  '1,2':  { r: 79, name: '알리' },
+  '1,4':  { r: 78, name: '독사' },
+  '1,9':  { r: 77, name: '구삥' },
+  '1,10': { r: 76, name: '장삥' },
+  '4,10': { r: 75, name: '장사' },
+  '4,6':  { r: 74, name: '세륙' },
+};
+
+function sdEval(cards) {
+  if (!cards || cards.length < 2) return { r: -1, name: '?' };
+  const m1 = Math.min(cards[0].m, cards[1].m);
+  const m2 = Math.max(cards[0].m, cards[1].m);
+  if (cards[0].gwang && cards[1].gwang) {
+    const key = `${m1},${m2}`;
+    if (key === '3,8')  return { r: 100, name: '38광땡' };
+    if (key === '1,8')  return { r: 99,  name: '18광땡' };
+    if (key === '1,3')  return { r: 98,  name: '13광땡' };
+  }
+  if (m1 === m2) return { r: 80 + m1, name: m1 === 10 ? '장땡' : `${m1}땡` };
+  const sp = SD_SPECIAL[`${m1},${m2}`];
+  if (sp) return sp;
+  const kkut = (m1 + m2) % 10;
+  return { r: kkut, name: kkut === 0 ? '망통' : kkut === 9 ? '갑오' : `${kkut}끗` };
+}
+
+function sdBuildGame(pa, pb, qa, qb) {
+  const stake = hwCalcStake(pa.chips || '0', pb.chips || '0');
+  let ante = stake / 10n;
+  if (ante < 1n) ante = stake > 0n ? 1n : 0n;
+  const deck = sdCreateDeck();
+  const mk = (p) => ({
+    nickname: p.nickname, chips: p.chips || '0',
+    cards: [deck.pop()], committed: ante.toString(), folded: false, acted: false, allIn: false,
+  });
+  const first = Math.random() < 0.5 ? 0 : 1;
+  return {
+    gameId: crypto.randomBytes(8).toString('hex'),
+    game: 'seotda',
+    phase: 'bet1',
+    deck,
+    players: [mk(pa), mk(pb)],
+    stake: stake.toString(),
+    ante: ante.toString(),
+    pot: (ante * 2n).toString(),
+    roundHigh: ante.toString(),      // 이번 라운드까지의 최대 누적 베팅
+    acting: first,
+    firstActor: first,
+    showdown: null,
+    result: null,
+    log: ['앤티 자동 차감 · 첫 장 배분'],
+    createdAt: new Date(),
+    lastUpdate: new Date(),
+  };
+}
+
+function sdView(game, pidx) {
+  const me = game.players[pidx], op = game.players[1 - pidx];
+  const revealed = game.phase === 'showdown' || game.phase === 'finished';
+  const v = {
+    status: game.result ? 'game_over' : 'in_game',
+    game: 'seotda',
+    gameId: game.gameId,
+    phase: game.phase,
+    pot: game.pot,
+    ante: game.ante,
+    stake: game.stake,
+    roundHigh: game.roundHigh,
+    isMyTurn: game.acting === pidx && !game.result,
+    myNick: me.nickname, opNick: op.nickname,
+    myChips: me.chips, opChips: op.chips,
+    myCommitted: me.committed, opCommitted: op.committed,
+    myFolded: me.folded, opFolded: op.folded,
+    myCards: me.cards,
+    opCards: revealed ? op.cards : op.cards.map(() => null),
+    opCardCount: op.cards.length,
+    myHand: me.cards.length === 2 ? sdEval(me.cards).name : null,
+    log: (game.log || []).slice(-6),
+    showdown: revealed ? game.showdown : null,
+  };
+  if (game.result) {
+    v.winner = game.result.winner === -1 ? 'tie' : (game.result.winner === pidx ? 'me' : 'opponent');
+    v.pot = game.result.pot;
+    v.myDelta = game.result.delta[pidx];
+    v.opCards = op.cards;
+  }
+  return v;
+}
+
+// 라운드 종료 판정: 살아있는 전원이 액션했고 누적 베팅이 같음
+function sdRoundDone(game) {
+  const alive = game.players.filter(p => !p.folded);
+  if (alive.length <= 1) return true;
+  if (alive.some(p => !p.acted)) return false;
+  return alive.every(p => p.committed === game.roundHigh || p.allIn);
+}
+
+async function sdAdvance(db, game) {
+  game.pot = game.players.reduce((s, p) => s + BigInt(p.committed), 0n).toString();
+  if (game.phase === 'bet1') {
+    game.players.forEach(p => { p.cards.push(game.deck.pop()); p.acted = false; });
+    game.phase = 'bet2';
+    game.acting = game.firstActor;
+    game.log.push('둘째 장 배분 — 최종 베팅');
+    return;
+  }
+  await sdShowdown(db, game);
+}
+
+async function sdShowdown(db, game) {
+  const alive = game.players.map((p, i) => ({ p, i })).filter(x => !x.p.folded);
+  if (alive.length === 1) { await sdFinish(db, game, alive[0].i, true); return; }
+  const e0 = sdEval(game.players[0].cards);
+  const e1 = sdEval(game.players[1].cards);
+  const winner = e0.r > e1.r ? 0 : e1.r > e0.r ? 1 : -1;
+  game.showdown = { p0: e0.name, p1: e1.name, winner };
+  game.phase = 'showdown';
+  await sdFinish(db, game, winner, false);
+}
+
+async function sdFinish(db, game, winnerIdx, byFold) {
+  if (game.result) return;
+  const pot = game.players.reduce((s, p) => s + BigInt(p.committed), 0n);
+  const stake = BigInt(game.stake || '0');
+  const delta = ['0', '0'];
+  for (let i = 0; i < 2; i++) {
+    // 에스크로 잔액 반환 + (승자면) 팟 수령
+    let back = stake - BigInt(game.players[i].committed);
+    if (back < 0n) back = 0n;
+    let gain = back;
+    if (winnerIdx === i) gain += pot;
+    else if (winnerIdx === -1) gain += pot / 2n + (i === 0 ? pot % 2n : 0n);
+    if (gain > 0n) {
+      const next = await hwAddChips(db, game.players[i].nickname, gain);
+      if (next) game.players[i].chips = next;
+    }
+    delta[i] = (gain - stake).toString();
+  }
+  game.pot = pot.toString();
+  game.phase = 'finished';
+  game.result = { winner: winnerIdx, byFold, pot: pot.toString(), delta };
+  game.log.push(winnerIdx === -1 ? '무승부 — 팟 분배'
+    : `${game.players[winnerIdx].nickname} 승리${byFold ? ' (상대 다이)' : ''}`);
+  await db.collection('sd_games').updateOne({ gameId: game.gameId }, { $set: {
+    phase: game.phase, result: game.result, players: game.players,
+    showdown: game.showdown, pot: game.pot, log: game.log, lastUpdate: new Date(),
+  } });
+}
+
+async function sdSave(db, game) {
+  await db.collection('sd_games').updateOne({ gameId: game.gameId }, { $set: {
+    phase: game.phase, deck: game.deck, players: game.players, pot: game.pot,
+    roundHigh: game.roundHigh, acting: game.acting, showdown: game.showdown,
+    result: game.result, log: game.log, lastUpdate: new Date(),
+  } });
+}
+
+async function sdStart(db, g) {
+  for (const p of g.players) {
+    const next = await hwAddChips(db, p.nickname, -BigInt(g.stake));
+    if (next) p.chips = next;
+  }
+  await sdSave(db, g);
+}
+
+app.get('/api/seotda', async (req, res) => {
+  const { action, nickname, token } = req.query;
+  try {
+    if (!nickname || !token) return res.status(400).json({ error: 'missing' });
+    const db = await getDb();
+    const me = await db.collection('players').findOne({ nickname, token });
+    if (!me) return res.status(401).json({ error: '인증 실패' });
+    if (action !== 'poll') return res.status(400).json({ error: 'unknown action' });
+
+    const game = await hwFindGame(db, 'sd_games', nickname);
+    if (game) {
+      const pidx = game.players[0].nickname === nickname ? 0 : 1;
+      // 상대 장기 미응답 → 몰수승
+      if (!game.result && Date.now() - new Date(game.lastUpdate).getTime() > 120000) {
+        game.players[game.acting].folded = true;
+        await sdFinish(db, game, 1 - game.acting, true);   // 시간 초과 = 차례인 쪽 패배
+      }
+      return res.json(sdView(game, pidx));
+    }
+    if (await db.collection('sd_queue').findOne({ nickname })) {
+      const g = await hwTryMatch(db, 'sd_queue', 'sd_games', sdBuildGame);
+      if (g) await sdStart(db, g);
+      const mine = await hwFindGame(db, 'sd_games', nickname);
+      if (mine) return res.json(sdView(mine, mine.players[0].nickname === nickname ? 0 : 1));
+      return res.json({ status: 'queued' });
+    }
+    return res.json({ status: 'idle' });
+  } catch (e) { console.error('GET /api/seotda', e); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/seotda', async (req, res) => {
+  const { action } = req.query;
+  const body = req.body || {};
+  try {
+    const { nickname, token } = body;
+    if (!nickname || !token) return res.status(400).json({ error: 'missing' });
+    const db = await getDb();
+    const me = await db.collection('players').findOne({ nickname, token });
+    if (!me) return res.status(401).json({ error: '인증 실패' });
+    const qCol = db.collection('sd_queue');
+
+    if (action === 'queue') {
+      if (await hwFindGame(db, 'sd_games', nickname)) return res.status(400).json({ error: '이미 게임 중' });
+      if (BigInt(me.chips || '0') < 10n) return res.status(400).json({ error: '칩이 부족합니다' });
+      await qCol.updateOne({ nickname }, { $set: { nickname, chips: me.chips || '0', createdAt: new Date() } }, { upsert: true });
+      const g = await hwTryMatch(db, 'sd_queue', 'sd_games', sdBuildGame);
+      if (g) await sdStart(db, g);
+      const mine = await hwFindGame(db, 'sd_games', nickname);
+      if (mine) return res.json(sdView(mine, mine.players[0].nickname === nickname ? 0 : 1));
+      return res.json({ status: 'queued' });
+    }
+
+    if (action === 'cancel_queue') { await qCol.deleteMany({ nickname }); return res.json({ status: 'idle' }); }
+
+    if (action === 'bet') {
+      const game = await hwFindGame(db, 'sd_games', nickname);
+      if (!game || game.result) return res.status(400).json({ error: '게임 없음' });
+      if (!['bet1', 'bet2'].includes(game.phase)) return res.status(400).json({ error: '베팅 단계 아님' });
+      const pidx = game.players[0].nickname === nickname ? 0 : 1;
+      if (game.acting !== pidx) return res.status(400).json({ error: '상대 차례' });
+      const p = game.players[pidx], op = game.players[1 - pidx];
+      if (p.folded) return res.status(400).json({ error: '이미 다이' });
+
+      const stake = BigInt(game.stake || '0');
+      const ante = BigInt(game.ante || '1');
+      const high = BigInt(game.roundHigh || '0');
+      const mine = BigInt(p.committed || '0');
+      const act = body.betAction;
+
+      if (act === 'die') {
+        p.folded = true;
+        game.log.push(`${p.nickname} 다이`);
+        await sdFinish(db, game, 1 - pidx, true);
+        return res.json(sdView(game, pidx));
+      }
+
+      if (act === 'call' || act === 'check') {
+        if (high > mine) {
+          const need = high - mine;
+          const room = stake - mine;
+          const pay = need > room ? room : need;
+          p.committed = (mine + pay).toString();
+          if (pay < need) p.allIn = true;
+          game.log.push(`${p.nickname} 콜`);
+        } else game.log.push(`${p.nickname} 체크`);
+        p.acted = true;
+      } else if (act === 'raise') {
+        // 삥(1) / 따당(2) / 하프 / 풀 — 단위는 앤티 배수 또는 팟 비율
+        const mode = body.raiseMode || 'ping';
+        const potNow = game.players.reduce((s, q) => s + BigInt(q.committed), 0n);
+        let add;
+        if (mode === 'ping') add = ante;
+        else if (mode === 'ttadang') add = ante * 2n;
+        else if (mode === 'half') add = potNow / 2n;
+        else add = potNow;                            // full
+        if (add < ante) add = ante;
+        let target = high + add;
+        const room = stake;
+        if (target > room) target = room;
+        if (target <= mine) return res.status(400).json({ error: '더 이상 베팅할 수 없습니다' });
+        p.committed = target.toString();
+        if (target >= room) p.allIn = true;
+        game.roundHigh = target.toString();
+        p.acted = true; op.acted = false;
+        game.log.push(`${p.nickname} ${ { ping:'삥', ttadang:'따당', half:'하프', full:'풀' }[mode] || '레이즈' }`);
+      } else return res.status(400).json({ error: '알 수 없는 액션' });
+
+      game.pot = game.players.reduce((s, q) => s + BigInt(q.committed), 0n).toString();
+      if (sdRoundDone(game)) await sdAdvance(db, game);
+      else game.acting = 1 - pidx;
+      if (!game.result) await sdSave(db, game);
+      return res.json(sdView(game, pidx));
+    }
+
+    if (action === 'leave') {
+      await qCol.deleteMany({ nickname });
+      const game = await hwFindGame(db, 'sd_games', nickname);
+      if (game) {
+        const pidx = game.players[0].nickname === nickname ? 0 : 1;
+        if (!game.result) { game.players[pidx].folded = true; await sdFinish(db, game, 1 - pidx, true); }
+      }
+      await db.collection('sd_games').updateMany({
+        $or: [{ 'players.0.nickname': nickname }, { 'players.1.nickname': nickname }], phase: 'finished',
+      }, { $set: { phase: 'cleanup' } });
+      return res.json({ status: 'idle' });
+    }
+
+    return res.status(400).json({ error: 'unknown action' });
+  } catch (e) { console.error('POST /api/seotda', e); res.status(500).json({ error: e.message }); }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 고스톱 (Go-Stop) — 1:1 전용, 2인 맞고 규칙 (7점부터 스톱 가능)
+// ───────────────────────────────────────────────────────────────────────────
+
+const GS_STOP_MIN = 7;
+const GS_TAKE_PRIORITY = { gwang: 4, yeol: 3, tti: 2, pi: 1 };
+
+function gsBestOf(cards) {
+  return cards.slice().sort((a, b) => {
+    const d = (GS_TAKE_PRIORITY[b.kind] || 0) - (GS_TAKE_PRIORITY[a.kind] || 0);
+    if (d) return d;
+    return (b.pi || 0) - (a.pi || 0);
+  })[0];
+}
+
+function gsScore(captured) {
+  const cap = captured || [];
+  const gwang = cap.filter(c => c.kind === 'gwang');
+  const yeol  = cap.filter(c => c.kind === 'yeol');
+  const tti   = cap.filter(c => c.kind === 'tti');
+  const piNum = cap.filter(c => c.kind === 'pi').reduce((s, c) => s + (c.pi || 1), 0);
+  const det = [];
+  let s = 0;
+  if (gwang.length >= 5)      { s += 15; det.push('오광 15'); }
+  else if (gwang.length === 4){ s += 4;  det.push('사광 4'); }
+  else if (gwang.length === 3){
+    if (gwang.some(c => c.bi)) { s += 2; det.push('비삼광 2'); }
+    else                       { s += 3; det.push('삼광 3'); }
+  }
+  if (yeol.length >= 5) { s += yeol.length - 4; det.push(`열끗 ${yeol.length - 4}`); }
+  if (yeol.filter(c => c.godori).length === 3) { s += 5; det.push('고도리 5'); }
+  if (tti.length >= 5) { s += tti.length - 4; det.push(`띠 ${tti.length - 4}`); }
+  const hong = tti.filter(c => c.sub === 'hong').length;
+  const cheong = tti.filter(c => c.sub === 'cheong').length;
+  const cho = tti.filter(c => c.sub === 'cho').length;
+  if (hong >= 3)   { s += 3; det.push('홍단 3'); }
+  if (cheong >= 3) { s += 3; det.push('청단 3'); }
+  if (cho >= 3)    { s += 3; det.push('초단 3'); }
+  if (piNum >= 10) { s += piNum - 9; det.push(`피 ${piNum - 9}`); }
+  return { score: s, det, gwang: gwang.length, yeol: yeol.length, tti: tti.length, pi: piNum };
+}
+
+function gsBuildGame(pa, pb) {
+  const stake = hwCalcStake(pa.chips || '0', pb.chips || '0');
+  let pv = stake / 20n;
+  if (pv < 1n) pv = stake > 0n ? 1n : 0n;
+
+  let deck, field, hands;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    deck = hwShuffle(hwBuildDeck());
+    hands = [deck.splice(0, 10), deck.splice(0, 10)];
+    field = deck.splice(0, 8);
+    const cnt = {};
+    field.forEach(c => { cnt[c.m] = (cnt[c.m] || 0) + 1; });
+    if (!Object.values(cnt).some(v => v >= 4)) break;   // 바닥 4장 겹침 → 재분배
+  }
+
+  const mk = (p, hand) => ({
+    nickname: p.nickname, chips: p.chips || '0',
+    hand, captured: [], go: 0, lastGoScore: 0, score: 0,
+  });
+  const g = {
+    gameId: crypto.randomBytes(8).toString('hex'),
+    game: 'gostop',
+    phase: 'playing',
+    deck, field,
+    players: [mk(pa, hands[0]), mk(pb, hands[1])],
+    turn: Math.random() < 0.5 ? 0 : 1,
+    pending: null,
+    stake: stake.toString(),
+    pointValue: pv.toString(),
+    result: null,
+    log: ['게임 시작 — 각자 10장, 바닥 8장'],
+    createdAt: new Date(),
+    lastUpdate: new Date(),
+  };
+  // 총통(같은 달 4장) 즉시 승리
+  for (let i = 0; i < 2; i++) {
+    const cnt = {};
+    g.players[i].hand.forEach(c => { cnt[c.m] = (cnt[c.m] || 0) + 1; });
+    const chong = Object.entries(cnt).find(([, v]) => v === 4);
+    if (chong) { g.chongtong = { idx: i, month: Number(chong[0]) }; break; }
+  }
+  return g;
+}
+
+function gsPublicPlayer(p) {
+  return {
+    nickname: p.nickname, chips: p.chips, handCount: p.hand.length,
+    captured: p.captured, go: p.go, ...gsScore(p.captured),
+  };
+}
+
+function gsView(game, pidx) {
+  const me = game.players[pidx], op = game.players[1 - pidx];
+  const myS = gsScore(me.captured);
+  const v = {
+    status: game.result ? 'game_over' : 'in_game',
+    game: 'gostop',
+    gameId: game.gameId,
+    phase: game.phase,
+    field: game.field,
+    deckCount: game.deck.length,
+    myHand: me.hand,
+    me: gsPublicPlayer(me),
+    op: gsPublicPlayer(op),
+    isMyTurn: game.turn === pidx && !game.result,
+    pending: game.turn === pidx ? game.pending : null,
+    stake: game.stake,
+    pointValue: game.pointValue,
+    canStop: myS.score >= GS_STOP_MIN,
+    stopMin: GS_STOP_MIN,
+    lastFlip: game.lastFlip || null,
+    log: (game.log || []).slice(-7),
+  };
+  if (game.result) {
+    v.winner = game.result.winner === -1 ? 'draw' : (game.result.winner === pidx ? 'me' : 'opponent');
+    v.settle = game.result.settle;
+    v.myDelta = game.result.delta[pidx];
+    v.opHand = op.hand;
+  }
+  return v;
+}
+
+function gsRemoveField(game, cards) {
+  const ids = new Set(cards.map(c => c.id));
+  game.field = game.field.filter(c => !ids.has(c.id));
+}
+
+// 상대에게서 피 빼앗기 (값이 낮은 피부터)
+function gsStealPi(game, pidx, n) {
+  const op = game.players[1 - pidx];
+  const me = game.players[pidx];
+  let moved = 0;
+  for (let k = 0; k < n; k++) {
+    const pool = op.captured.filter(c => c.kind === 'pi');
+    if (!pool.length) break;
+    pool.sort((a, b) => (a.pi || 1) - (b.pi || 1));
+    const c = pool[0];
+    op.captured = op.captured.filter(x => x.id !== c.id);
+    me.captured.push(c);
+    moved++;
+  }
+  return moved;
+}
+
+// 한 턴 처리: 손패 1장 → 더미 1장 뒤집기
+function gsRunTurn(game, pidx, card, chosenFieldId) {
+  const p = game.players[pidx];
+  const ev = [];
+  let taken = [];
+  let steal = 0;
+  let placed = null;
+
+  const fm = game.field.filter(c => c.m === card.m);
+  const handMatch = fm.length;
+  if (handMatch === 0) { game.field.push(card); placed = card; }
+  else if (handMatch === 3) {
+    taken.push(card, ...fm); gsRemoveField(game, fm); steal++; ev.push('쓸어담기! 상대 피 1장');
+  } else {
+    const pick = fm.find(c => c.id === chosenFieldId) || gsBestOf(fm);
+    taken.push(card, pick); gsRemoveField(game, [pick]);
+  }
+
+  const flip = game.deck.length ? game.deck.pop() : null;
+  game.lastFlip = flip;
+  if (flip) {
+    const ff = game.field.filter(c => c.m === flip.m);
+    if (handMatch === 1 && flip.m === card.m) {
+      // 뻑 — 낸 패·먹은 패·뒤집은 패 모두 바닥으로
+      game.field.push(...taken, flip);
+      taken = [];
+      ev.push('뻑! 이번 턴 획득 없음');
+    } else if (handMatch === 0 && placed && flip.m === card.m) {
+      // 쪽 — 방금 깐 패를 그대로 되먹음
+      taken.push(flip, placed); gsRemoveField(game, [placed]);
+      steal++; ev.push('쪽! 상대 피 1장');
+    } else if (ff.length === 0) {
+      game.field.push(flip);
+    } else if (ff.length === 3) {
+      taken.push(flip, ...ff); gsRemoveField(game, ff); steal++; ev.push('쓸어담기! 상대 피 1장');
+    } else {
+      const pick = gsBestOf(ff);
+      taken.push(flip, pick); gsRemoveField(game, [pick]);
+      if (handMatch === 2 && flip.m === card.m) { steal++; ev.push('따닥! 상대 피 1장'); }
+    }
+  }
+
+  p.captured.push(...taken);
+  if (steal > 0) {
+    const moved = gsStealPi(game, pidx, steal);
+    if (moved === 0) ev.push('(상대 피 없음)');
+  }
+  return ev;
+}
+
+async function gsSettle(db, game, winnerIdx, reason) {
+  if (game.result) return;
+  const stake = BigInt(game.stake || '0');
+  const pv = BigInt(game.pointValue || '0');
+  const delta = ['0', '0'];
+  let settle = { reason, pts: 0, mult: 1, flags: [], amount: '0' };
+
+  if (winnerIdx === -1) {
+    for (let i = 0; i < 2; i++) { if (stake > 0n) await hwAddChips(db, game.players[i].nickname, stake); }
+  } else {
+    const w = gsScore(game.players[winnerIdx].captured);
+    const l = gsScore(game.players[1 - winnerIdx].captured);
+    const go = game.players[winnerIdx].go;
+    let pts = reason === 'chongtong' ? GS_STOP_MIN : w.score;
+    let mult = 1;
+    const flags = [];
+    if (go >= 1) { pts += Math.min(go, 2); flags.push(`${go}고`); }
+    if (go >= 3) mult *= Math.pow(2, go - 2);
+    if (reason !== 'chongtong') {
+      if (w.pi >= 10 && l.pi < 5)              { mult *= 2; flags.push('피박'); }
+      if (w.gwang >= 3 && l.gwang === 0)       { mult *= 2; flags.push('광박'); }
+      if (w.yeol >= 7 && l.yeol === 0)         { mult *= 2; flags.push('멍박'); }
+      if (game.players[1 - winnerIdx].go > 0)  { mult *= 2; flags.push('고박'); }
+    }
+    let amount = pv * BigInt(pts) * BigInt(mult);
+    if (amount > stake) amount = stake;
+    settle = { reason, pts, mult, flags, amount: amount.toString(), detail: w.det, winScore: w.score };
+    for (let i = 0; i < 2; i++) {
+      const gain = i === winnerIdx ? stake + amount : stake - amount;
+      if (gain > 0n) {
+        const next = await hwAddChips(db, game.players[i].nickname, gain);
+        if (next) game.players[i].chips = next;
+      }
+      delta[i] = (gain - stake).toString();
+    }
+  }
+  game.phase = 'finished';
+  game.result = { winner: winnerIdx, settle, delta };
+  game.log.push(winnerIdx === -1 ? '나가리 — 판돈 반환'
+    : `${game.players[winnerIdx].nickname} ${settle.pts}점 × ${settle.mult}배 승리`);
+  await gsSave(db, game);
+}
+
+async function gsSave(db, game) {
+  await db.collection('gs_games').updateOne({ gameId: game.gameId }, { $set: {
+    phase: game.phase, deck: game.deck, field: game.field, players: game.players,
+    turn: game.turn, pending: game.pending, result: game.result, log: game.log,
+    lastFlip: game.lastFlip || null, chongtong: game.chongtong || null, lastUpdate: new Date(),
+  } });
+}
+
+// 턴 종료 후 고/스톱 여부 판정
+async function gsAfterTurn(db, game, pidx) {
+  const p = game.players[pidx];
+  const sc = gsScore(p.captured);
+  p.score = sc.score;
+  if (sc.score >= GS_STOP_MIN && sc.score > p.lastGoScore) {
+    game.phase = 'go_choice';
+    game.pending = { type: 'go', score: sc.score };
+    game.turn = pidx;
+    game.log.push(`${p.nickname} ${sc.score}점 — 고/스톱 선택`);
+    await gsSave(db, game);
+    return;
+  }
+  if (game.players.every(q => q.hand.length === 0)) { await gsSettle(db, game, -1, 'nagari'); return; }
+  game.phase = 'playing';
+  game.pending = null;
+  game.turn = 1 - pidx;
+  await gsSave(db, game);
+}
+
+app.get('/api/gostop', async (req, res) => {
+  const { action, nickname, token } = req.query;
+  try {
+    if (!nickname || !token) return res.status(400).json({ error: 'missing' });
+    const db = await getDb();
+    const me = await db.collection('players').findOne({ nickname, token });
+    if (!me) return res.status(401).json({ error: '인증 실패' });
+    if (action !== 'poll') return res.status(400).json({ error: 'unknown action' });
+
+    const game = await hwFindGame(db, 'gs_games', nickname);
+    if (game) {
+      const pidx = game.players[0].nickname === nickname ? 0 : 1;
+      if (!game.result && Date.now() - new Date(game.lastUpdate).getTime() > 180000) {
+        await gsSettle(db, game, 1 - game.turn, 'timeout');  // 시간 초과 = 차례인 쪽 패배
+      }
+      return res.json(gsView(game, pidx));
+    }
+    if (await db.collection('gs_queue').findOne({ nickname })) {
+      const g = await hwTryMatch(db, 'gs_queue', 'gs_games', gsBuildGame);
+      if (g) await gsStart(db, g);
+      const mine = await hwFindGame(db, 'gs_games', nickname);
+      if (mine) return res.json(gsView(mine, mine.players[0].nickname === nickname ? 0 : 1));
+      return res.json({ status: 'queued' });
+    }
+    return res.json({ status: 'idle' });
+  } catch (e) { console.error('GET /api/gostop', e); res.status(500).json({ error: e.message }); }
+});
+
+async function gsStart(db, g) {
+  for (const p of g.players) await hwAddChips(db, p.nickname, -BigInt(g.stake));
+  if (g.chongtong) {
+    g.log.push(`총통! ${g.players[g.chongtong.idx].nickname} (${g.chongtong.month}월 4장)`);
+    await gsSettle(db, g, g.chongtong.idx, 'chongtong');
+  } else await gsSave(db, g);
+}
+
+app.post('/api/gostop', async (req, res) => {
+  const { action } = req.query;
+  const body = req.body || {};
+  try {
+    const { nickname, token } = body;
+    if (!nickname || !token) return res.status(400).json({ error: 'missing' });
+    const db = await getDb();
+    const me = await db.collection('players').findOne({ nickname, token });
+    if (!me) return res.status(401).json({ error: '인증 실패' });
+    const qCol = db.collection('gs_queue');
+
+    if (action === 'queue') {
+      if (await hwFindGame(db, 'gs_games', nickname)) return res.status(400).json({ error: '이미 게임 중' });
+      if (BigInt(me.chips || '0') < 20n) return res.status(400).json({ error: '칩이 부족합니다' });
+      await qCol.updateOne({ nickname }, { $set: { nickname, chips: me.chips || '0', createdAt: new Date() } }, { upsert: true });
+      const g = await hwTryMatch(db, 'gs_queue', 'gs_games', gsBuildGame);
+      if (g) await gsStart(db, g);
+      const mine = await hwFindGame(db, 'gs_games', nickname);
+      if (mine) return res.json(gsView(mine, mine.players[0].nickname === nickname ? 0 : 1));
+      return res.json({ status: 'queued' });
+    }
+
+    if (action === 'cancel_queue') { await qCol.deleteMany({ nickname }); return res.json({ status: 'idle' }); }
+
+    if (action === 'play') {
+      const game = await hwFindGame(db, 'gs_games', nickname);
+      if (!game || game.result) return res.status(400).json({ error: '게임 없음' });
+      if (game.phase !== 'playing') return res.status(400).json({ error: '지금은 낼 수 없습니다' });
+      const pidx = game.players[0].nickname === nickname ? 0 : 1;
+      if (game.turn !== pidx) return res.status(400).json({ error: '상대 차례' });
+      const p = game.players[pidx];
+      const hi = p.hand.findIndex(c => c.id === body.cardId);
+      if (hi < 0) return res.status(400).json({ error: '없는 패' });
+      const card = p.hand[hi];
+
+      // 바닥에 같은 달 2장 → 어느 쪽을 먹을지 선택 필요
+      const fm = game.field.filter(c => c.m === card.m);
+      if (fm.length === 2 && !body.fieldId) {
+        game.phase = 'choose';
+        game.pending = { type: 'choose', cardId: card.id, options: fm.map(c => c.id) };
+        await gsSave(db, game);
+        return res.json(gsView(game, pidx));
+      }
+      p.hand.splice(hi, 1);
+      const ev = gsRunTurn(game, pidx, card, body.fieldId);
+      game.log.push(`${p.nickname}: ${card.m}월 ${HW_MONTH_NAME[card.m]}` + (ev.length ? ` · ${ev.join(' · ')}` : ''));
+      await gsAfterTurn(db, game, pidx);
+      return res.json(gsView(game, pidx));
+    }
+
+    if (action === 'choose') {
+      const game = await hwFindGame(db, 'gs_games', nickname);
+      if (!game || game.result) return res.status(400).json({ error: '게임 없음' });
+      if (game.phase !== 'choose' || !game.pending) return res.status(400).json({ error: '선택 단계 아님' });
+      const pidx = game.players[0].nickname === nickname ? 0 : 1;
+      if (game.turn !== pidx) return res.status(400).json({ error: '상대 차례' });
+      if (!game.pending.options.includes(body.fieldId)) return res.status(400).json({ error: '선택 불가' });
+      const p = game.players[pidx];
+      const hi = p.hand.findIndex(c => c.id === game.pending.cardId);
+      if (hi < 0) return res.status(400).json({ error: '없는 패' });
+      const card = p.hand.splice(hi, 1)[0];
+      const ev = gsRunTurn(game, pidx, card, body.fieldId);
+      game.log.push(`${p.nickname}: ${card.m}월 ${HW_MONTH_NAME[card.m]}` + (ev.length ? ` · ${ev.join(' · ')}` : ''));
+      await gsAfterTurn(db, game, pidx);
+      return res.json(gsView(game, pidx));
+    }
+
+    if (action === 'go' || action === 'stop') {
+      const game = await hwFindGame(db, 'gs_games', nickname);
+      if (!game || game.result) return res.status(400).json({ error: '게임 없음' });
+      if (game.phase !== 'go_choice') return res.status(400).json({ error: '선택 단계 아님' });
+      const pidx = game.players[0].nickname === nickname ? 0 : 1;
+      if (game.turn !== pidx) return res.status(400).json({ error: '권한 없음' });
+      const p = game.players[pidx];
+      if (action === 'stop') {
+        game.log.push(`${p.nickname} 스톱!`);
+        await gsSettle(db, game, pidx, 'stop');
+        return res.json(gsView(game, pidx));
+      }
+      p.go += 1;
+      p.lastGoScore = gsScore(p.captured).score;
+      game.log.push(`${p.nickname} ${p.go}고!`);
+      if (game.players.every(q => q.hand.length === 0)) {
+        // 고를 외쳤는데 낼 패가 없으면 그 자리에서 종료(고박 없이 현재 점수 정산)
+        await gsSettle(db, game, pidx, 'stop');
+        return res.json(gsView(game, pidx));
+      }
+      game.phase = 'playing';
+      game.pending = null;
+      game.turn = 1 - pidx;
+      await gsSave(db, game);
+      return res.json(gsView(game, pidx));
+    }
+
+    if (action === 'leave') {
+      await qCol.deleteMany({ nickname });
+      const game = await hwFindGame(db, 'gs_games', nickname);
+      if (game && !game.result) {
+        const pidx = game.players[0].nickname === nickname ? 0 : 1;
+        await gsSettle(db, game, 1 - pidx, 'leave');
+      }
+      await db.collection('gs_games').updateMany({
+        $or: [{ 'players.0.nickname': nickname }, { 'players.1.nickname': nickname }], phase: 'finished',
+      }, { $set: { phase: 'cleanup' } });
+      return res.json({ status: 'idle' });
+    }
+
+    return res.status(400).json({ error: 'unknown action' });
+  } catch (e) { console.error('POST /api/gostop', e); res.status(500).json({ error: e.message }); }
+});
+
 // ─── Cleanup stale queue/games periodically ─────────────────────────────────
 async function mpCleanup() {
   try {
@@ -1007,6 +1838,14 @@ async function mpCleanup() {
       phase: { $in: ['cleanup', 'finished'] },
       lastUpdate: { $lt: new Date(now - 600000) }
     });
+    // 화투 게임(섯다/고스톱) 큐·판 정리
+    for (const [q, g] of [['sd_queue', 'sd_games'], ['gs_queue', 'gs_games']]) {
+      await db.collection(q).deleteMany({ createdAt: { $lt: new Date(now - 300000) } });
+      await db.collection(g).deleteMany({
+        phase: { $in: ['cleanup', 'finished'] },
+        lastUpdate: { $lt: new Date(now - 600000) }
+      });
+    }
     // Remove stale roulette players (no ping for 30s)
     await db.collection('roulette_state').updateOne({ _id: 'global' }, {
       $pull: { players: { lastPing: { $lt: new Date(now - 30000) } } }

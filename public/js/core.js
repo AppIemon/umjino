@@ -15,7 +15,8 @@ let sessionNickname=null,sessionToken=null;
 // ── Tab music map ────────────────────────────
 const TAB_MUSIC={
   poker:'bgMusic',roulette:'bgMusicRoulette',slot:'bgMusicSlot',
-  pvp:'bgMusicPvp',toto:'bgMusicToto',dice:'bgMusicDice',yacht:'bgMusicDice'
+  pvp:'bgMusicPvp',seotda:'bgMusicPvp',gostop:'bgMusicPvp',
+  toto:'bgMusicToto',dice:'bgMusicDice',yacht:'bgMusicDice'
 };
 
 // ── Network ──────────────────────────────────
@@ -71,11 +72,11 @@ function showTaxToast(){}
 let currentTab='poker';
 // 탭 그룹 (플레이/커뮤니티/관리자)
 const TAB_GROUPS = {
-  play: ['poker','roulette','slot','pvp','toto','dice'],
+  play: ['poker','roulette','slot','pvp','seotda','gostop','toto','dice'],
   community: ['community'],
   admin: ['admin'],
 };
-const PLAY_TABS = ['poker','roulette','slot','pvp','toto','dice','yacht'];
+const PLAY_TABS = ['poker','roulette','slot','pvp','seotda','gostop','toto','dice','yacht'];
 
 function switchTabGroup(group) {
   document.querySelectorAll('.nav-group-btn').forEach(el=>el.classList.toggle('active',el.dataset.group===group));
@@ -85,6 +86,8 @@ function switchTabGroup(group) {
     document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
     const t = currentTab && PLAY_TABS.includes(currentTab) ? currentTab : 'poker';
     _activateTab(t);
+    if (t === 'seotda') renderSeotdaUI();
+    if (t === 'gostop') renderGostopUI();
   } else {
     subRow.style.display = 'none';
     document.querySelectorAll('.tab-page').forEach(el=>el.classList.remove('active'));
@@ -117,6 +120,8 @@ function switchTab(name){
   currentTab=name;
   if(name==='roulette'){buildRlTable();updateRlChipRow();if(rlJoined)rlStartPolling();}
   if(name==='slot'){updateSlotChipsDisplay();if(typeof renderSlotChipStacks==='function')renderSlotChipStacks();}
+  if(name==='seotda')renderSeotdaUI();
+  if(name==='gostop')renderGostopUI();
   if(name==='toto')renderHorseTab();
   if(name==='dice')renderDiceUI();
   if(name==='yacht')renderYachtUI();
@@ -715,6 +720,29 @@ const GAME_HELP = {
       { h: '기본 규칙', p: '1:1 세븐 포커입니다. 매칭 후 앤티를 내고 카드를 받습니다.' },
       { h: '진행 순서', ul: ['① 매칭 후 앤티 자동 지급', '② 카드 4장 수령 → 1장 버리기', '③ 공개/비공개 카드 추가로 받기', '④ 1차~3차 베팅 (체크/콜/하프/풀/다이)', '⑤ 패 공개 → 높은 패 승리'] },
       { h: '베팅 옵션', table: [['버튼','설명'],['체크','추가 베팅 없이 넘기기'],['콜','상대 베팅 따라가기'],['하프','팟의 절반 레이즈'],['풀','팟 전액 레이즈'],['다이','포기 (이번 판 팟 상대에게)']] }
+    ]
+  },
+  seotda: {
+    title: '🎴 섯다 (멀티 전용)',
+    sections: [
+      { h: '기본 규칙', p: '싱글 모드가 없는 1:1 실시간 전용 게임입니다. 화투 1~10월 각 2장(총 20장)에서 두 장을 받아 족보로 겨룹니다.' },
+      { h: '진행 순서', ul: ['① 매칭되면 판돈이 에스크로로 잠기고 앤티가 자동 차감', '② 첫 장을 받고 1차 베팅', '③ 둘째 장을 받고 최종 베팅', '④ 패 공개 — 높은 족보 승리'] },
+      { h: '족보 (높은 순)', table: [['족보','구성'],['38광땡','3월광+8월광'],['18광땡','1월광+8월광'],['13광땡','1월광+3월광'],['장땡~1땡','같은 달 두 장'],['알리','1+2'],['독사','1+4'],['구삥','1+9'],['장삥','1+10'],['장사','4+10'],['세륙','4+6'],['갑오~망통','두 달의 합 끝자리 9~0']] },
+      { h: '베팅 옵션', table: [['버튼','설명'],['체크','추가 베팅 없이 넘기기'],['콜','상대 베팅 따라가기'],['삥','앤티 1배 올리기'],['따당','앤티 2배 올리기'],['하프','팟의 절반 올리기'],['풀','팟 전액 올리기'],['다이','포기 — 팟은 상대에게']] },
+      { h: '판돈', p: '매칭 시 두 사람 중 적은 잔액의 1/10이 에스크로로 잠깁니다. 베팅은 그 한도 안에서만 가능하고, 남은 몫은 판이 끝나면 그대로 돌아옵니다.' },
+      { h: '주의', p: '자기 차례에서 2분 넘게 응답이 없으면 자동 패배 처리됩니다.' },
+    ]
+  },
+  gostop: {
+    title: '🌸 고스톱 (멀티 전용)',
+    sections: [
+      { h: '기본 규칙', p: '싱글 모드가 없는 1:1 실시간 맞고입니다. 각자 10장, 바닥 8장으로 시작해 같은 달끼리 짝을 맞춰 먹습니다.' },
+      { h: '한 턴', ul: ['① 손패 1장을 내서 같은 달 바닥패를 먹음', '② 더미에서 1장을 뒤집어 한 번 더 먹음', '③ 바닥에 같은 달이 2장이면 어느 쪽을 먹을지 직접 선택'] },
+      { h: '점수', table: [['조합','점수'],['오광','15'],['사광','4'],['삼광','3'],['비삼광','2'],['고도리(2·4·8월 열끗)','5'],['홍단/청단/초단 각 3장','3'],['열끗 5장부터','1장당 1점'],['띠 5장부터','1장당 1점'],['피 10장부터','1장당 1점']] },
+      { h: '고 / 스톱', p: '7점을 넘고 점수가 올랐을 때만 고 또는 스톱을 고를 수 있습니다. 1·2고는 +1점씩, 3고부터는 2배씩 곱해집니다. 고를 외친 쪽이 지면 고박(×2)입니다.' },
+      { h: '특수 규칙', table: [['이름','효과'],['뻑','낸 패와 뒤집은 패가 같은 달 → 이번 턴 획득 없음'],['쪽','깐 패를 뒤집은 패로 되먹음 → 상대 피 1장'],['따닥','같은 달 4장을 한 턴에 → 상대 피 1장'],['쓸어담기','바닥 3장을 한 번에 → 상대 피 1장'],['총통','손패에 같은 달 4장 → 즉시 7점 승리']] },
+      { h: '배수', table: [['이름','조건'],['피박','승자 피 10장 이상 · 패자 피 5장 미만'],['광박','승자 광 3장 이상 · 패자 광 0장'],['멍박','승자 열끗 7장 이상 · 패자 열끗 0장'],['고박','패자가 고를 외쳤던 경우']] },
+      { h: '판돈', p: '매칭 시 두 사람 중 적은 잔액의 1/10이 에스크로로 잠기고, 점당 금액 × 점수 × 배수만큼만 오갑니다(에스크로 한도까지). 양쪽 손패가 모두 떨어지면 나가리로 판돈을 되돌려줍니다.' },
     ]
   },
   roulette: {
