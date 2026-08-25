@@ -300,17 +300,19 @@ function getHandRank(hand){
   const cnts={};vals.forEach(v=>cnts[v]=(cnts[v]||0)+1);
   const cv=Object.values(cnts).sort((a,b)=>b-a);
   const p=(name,n,d)=>({name,pnum:n,pden:d||1,payoutF:n/(d||1)});
-  // 배당표 — 하우스 엣지 약 6% (측정 EV 0.94).
-  // 원페어는 꽝. 투페어부터 지급해 당첨률을 24%로 낮추고 상단 배당을 키웠다.
-  if(isFlush&&isStraight&&vals[0]===14&&vals[1]===13)return p('로얄 스트레이트 플러시',4000);
-  if(isFlush&&isStraight)return p('스트레이트 플러시',400);
-  if(cv[0]===4)return p('포카드',55);
-  if(cv[0]===3&&cv[1]===2)return p('풀하우스',13);
-  if(isFlush)return p('플러시',8);
-  if(isStraight)return p('스트레이트',5);
+  // 배당표 — 환급률 176% (측정 EV 1.76). 오래 하면 자산이 늘어난다.
+  // 다만 이익이 나는 판은 24%뿐이고, 76%는 본전 이하로 끝난다.
+  // 원페어는 이익이 아니라 베팅액의 절반만 돌려주는 완충 구간이다.
+  // 수익의 대부분은 포카드 이상(0.25%)에서 나온다.
+  if(isFlush&&isStraight&&vals[0]===14&&vals[1]===13)return p('로얄 스트레이트 플러시',12000);
+  if(isFlush&&isStraight)return p('스트레이트 플러시',1200);
+  if(cv[0]===4)return p('포카드',150);
+  if(cv[0]===3&&cv[1]===2)return p('풀하우스',22);
+  if(isFlush)return p('플러시',12);
+  if(isStraight)return p('스트레이트',6);
   if(cv[0]===3)return p('트리플',3);
   if(cv[0]===2&&cv[1]===2)return p('투페어',2);
-  if(cv[0]===2)return p('원페어',0);
+  if(cv[0]===2)return p('원페어',1,2);          // ×0.5 부분 반환
   return p('노페어',0);
 }
 

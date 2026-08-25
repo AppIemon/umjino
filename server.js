@@ -364,10 +364,13 @@ function rlCheckWin(type, targetNum, result) {
   return false;
 }
 
-function rlMultiplier(type) {
-  if (type==='number'||type==='green') return 35;
-  if (type==='dozen1'||type==='dozen2'||type==='dozen3') return 2;
-  return 1;
+// 총 지급 배수를 분자/분모로 돌려준다 (원금 포함).
+// 0을 포함해 칸이 37개. 어느 칸이든 환급률은 117% 안팎이지만 성격이 다르다:
+// 색·홀짝은 절반이 맞아 꾸준히 늘고, 단일 숫자는 97%가 꽝인 대신 한 방이 크다.
+function rlPayoutRatio(type) {
+  if (type==='number'||type==='green') return [44n, 1n];      // ×44   → 44/37 = 1.189
+  if (type.startsWith('dozen'))        return [18n, 5n];      // ×3.6  → 1.168
+  return [12n, 5n];                                            // ×2.4  → 1.168
 }
 
 async function rlGetState(db) {
@@ -403,8 +406,8 @@ async function rlAdvancePhase(db, state) {
       for (const bet of state.bets) {
         const betAmt = BigInt(bet.amount||'0');
         const won = rlCheckWin(bet.type, bet.targetNum, result);
-        const mult = rlMultiplier(bet.type);
-        const winAmt = won ? betAmt * BigInt(mult + 1) : 0n;
+        const [rn, rd] = rlPayoutRatio(bet.type);
+        const winAmt = won ? betAmt * rn / rd : 0n;
         payouts.push({ nick: bet.nick, won, type: bet.type, betAmount: bet.amount, winAmount: winAmt.toString() });
         if (won) {
           try {
@@ -2083,10 +2086,12 @@ app.post('/api/dice', async (req, res) => {
     if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
     if (BigInt(p.chips || '0') < amt) return res.status(400).json({ error: '칩 부족' });
     const roll = Math.floor(Math.random() * 6) + 1;
-    // 배당은 분수로 준다 — 하우스 엣지 5% (양쪽 모두 EV 0.95)
+    // 배당은 분수로 준다. 둘 다 환급률 100% 초과지만 성격이 다르다:
+    //   홀짝 — 절반은 맞으므로 잔액의 20%까지 걸어도 장기적으로 자산이 는다
+    //   숫자 — 여섯 번에 다섯 번 잃는다. 기댓값은 높아도 몰빵하면 파산한다
     let won = false, num = 0n, den = 1n;
-    if (betType === 'exact') { won = roll === Number(guess); num = 57n; den = 10n; }        // ×5.7 → EV 0.95
-    else if (betType === 'parity') { won = (roll % 2 === 0) === (guess === 'even'); num = 19n; den = 10n; } // ×1.9 → EV 0.95
+    if (betType === 'exact') { won = roll === Number(guess); num = 7n; den = 1n; }          // ×7   → EV 1.17
+    else if (betType === 'parity') { won = (roll % 2 === 0) === (guess === 'even'); num = 24n; den = 10n; } // ×2.4 → EV 1.20
     else return res.status(400).json({ error: 'betType: exact|parity' });
     const payout = won ? amt * num / den : 0n;
     const newChips = (BigInt(p.chips) - amt + payout).toString();
@@ -2099,12 +2104,12 @@ app.post('/api/dice', async (req, res) => {
 // HORSE RACING  /api/horse
 // ═══════════════════════════════════════════════════════════
 // race 생성은 자동: GET creates/returns active race, POST places bet
-// ev = 베팅 1당 평균 환급률. 1 미만이어야 하우스 엣지가 생긴다.
-// 거리가 길수록 엣지가 크고 배당 편차도 커진다.
+// ev = 베팅 1당 평균 환급률. 1보다 크면 오래 할수록 자산이 늘어난다.
+// 거리가 길수록 환급률도 높고 배당 편차도 커진다 — 길게 갈수록 한 방이 크다.
 const HORSE_DISTANCES = [
-  { label: '단거리 (1000m)', duration: 20, ev: 0.94 },
-  { label: '중거리 (2000m)', duration: 40, ev: 0.91 },
-  { label: '장거리 (3000m)', duration: 65, ev: 0.88 },
+  { label: '단거리 (1000m)', duration: 20, ev: 1.30 },
+  { label: '중거리 (2000m)', duration: 40, ev: 1.38 },
+  { label: '장거리 (3000m)', duration: 65, ev: 1.48 },
 ];
 
 function generateHorseRace(numHorses, distIdx) {

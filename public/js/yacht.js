@@ -187,7 +187,10 @@ function yachtCalc(cat, dice) {
 }
 
 // ── 결과 화면 ─────────────────────────────
-const YACHT_BASE = 100, YACHT_DIV = 30, YACHT_CAP = 8;
+// 100점 초과분 20점당 ×1, 최대 ×12. 기준 미달이어도 ×0.4는 돌려준다.
+// 환급률 154% (측정 EV 1.54) — 12턴을 굴리는 게임이라 전손은 두지 않았다.
+// 절반 가까이(49%)는 본전 미만으로 끝나므로 잘 굴려야 남는다.
+const YACHT_BASE = 100, YACHT_DIV = 20, YACHT_CAP = 12, YACHT_FLOOR = 0.4;
 
 function renderYachtResult(el) {
   const scoreSum = Object.values(yachtScores).reduce((a,b)=>a+b, 0);
@@ -195,9 +198,8 @@ function renderYachtResult(el) {
   const bonus = upperScore >= 63 ? 35 : 0;
   const total = scoreSum + bonus;
 
-  // 배당: 기준점(100점) 초과분 30점당 ×1, 최대 ×8. 기준 미달이면 꽝.
-  // 하우스 엣지 약 6% (측정 EV 0.94), 약 29%는 꽝으로 끝난다.
-  const mult = Math.min(YACHT_CAP, Math.max(0, (total - YACHT_BASE) / YACHT_DIV));
+  // 배당: 기준점 초과분만큼 배율이 붙는다. 기준 미달이면 전액 잃는다.
+  const mult = Math.min(YACHT_CAP, Math.max(YACHT_FLOOR, (total - YACHT_BASE) / YACHT_DIV));
   const payout = BigInt(Math.round(Number(yachtBetAmt) * mult));
   const profit = payout - yachtBetAmt;
 

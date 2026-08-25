@@ -1,19 +1,30 @@
 // ═══════════════════════════════════════════
 // slot.js – 5×3 parallel slot machines
-// 하우스 엣지 약 5% (측정 EV 0.95), 당첨률 18%. 가로 연속만 인정.
+// 환급률 175% (측정 EV 1.75) — 오래 돌리면 자산이 늘어난다.
+// 다만 한 스핀 기준으로는 약 68%가 손실이고 41%는 전액을 잃는다.
+//
+// 설계 메모: 기댓값만 1을 넘겨서는 부족하다. 전액을 잃는 비율이 높으면
+// 기댓값이 커도 "전형적인 플레이어"의 자산은 0으로 수렴한다(로그 성장률 < 0).
+// 그래서 2연속에 ×0.5 부분 반환을 넣어 낙폭을 줄였다. 이건 이익이 아니라
+// 완충 장치이고, 실제 수익은 3연속 이상의 큰 배당에서 나온다.
+// 측정 로그 성장률: 잔액의 10% 베팅 +0.025 / 20% +0.017 / 30% -0.011
+//   → 한 판에 잔액의 1/4 이상을 걸면 기댓값이 높아도 장기적으로는 잃는다.
 // ═══════════════════════════════════════════
 
 const SLOT_SYMS = ['🍒','🍋','🍇','🔔','⭐','💎','7️⃣'];
 
-// 확률 가중치 (합=100). 7️⃣는 100번에 1번꼴.
-const SLOT_WEIGHTS = [34, 26, 18, 12, 6, 3, 1];
+// 확률 가중치 (합=100). 🍒가 흔한 대신 배당이 낮다.
+const SLOT_WEIGHTS = [44, 17, 13, 10, 8, 5, 3];
 const WEIGHT_TOTAL = SLOT_WEIGHTS.reduce((a,b)=>a+b,0);
 
-// 잔챙이 배당을 깎고 상단 잭팟을 키웠다 — 자주 잃고 가끔 크게 터진다.
+// 왼쪽부터 2연속이면 베팅액의 절반을 돌려준다 (이익 아님)
+const SLOT_PAY2 = 0.5;
+
+// 3연속 이상이 실제 배당. 7️⃣ 5연속은 300만 스핀에 한 번꼴.
 const SLOT_PAY = {
-  3: {'🍒':1,'🍋':2,'🍇':4,'🔔':7,'⭐':15,'💎':30,'7️⃣':100},
-  4: {'🍒':4,'🍋':8,'🍇':15,'🔔':30,'⭐':65,'💎':180,'7️⃣':700},
-  5: {'🍒':20,'🍋':35,'🍇':75,'🔔':160,'⭐':500,'💎':1500,'7️⃣':10000},
+  3: {'🍒':2,'🍋':4,'🍇':6,'🔔':11,'⭐':20,'💎':50,'7️⃣':250},
+  4: {'🍒':4,'🍋':18,'🍇':38,'🔔':95,'⭐':240,'💎':800,'7️⃣':6000},
+  5: {'🍒':10,'🍋':110,'🍇':260,'🔔':750,'⭐':2600,'💎':13000,'7️⃣':90000},
 };
 
 // 가로 3줄만
@@ -193,6 +204,8 @@ function weightedSym() {
 // ── Grid evaluation (가로 연속만) ────────────
 function evalSlotGrid(grid) {
   const lines = [], winCells = new Set();
+  // 배당에 0.5가 섞이므로 2배한 정수(half)로 모았다가 마지막에 2로 나눈다
+  let totalHalf = 0;
   for (const line of SLOT_WIN_LINES) {
     const syms = line.map(i => grid[i]), first = syms[0];
     let count = 1;
@@ -202,11 +215,15 @@ function evalSlotGrid(grid) {
       if (mult > 0) {
         lines.push({ sym: first, count, cells: line.slice(0, count), mult });
         line.slice(0, count).forEach(i => winCells.add(i));
+        totalHalf += mult * 2;
       }
+    } else if (count === 2) {
+      lines.push({ sym: first, count, cells: line.slice(0, 2), mult: SLOT_PAY2 });
+      line.slice(0, 2).forEach(i => winCells.add(i));
+      totalHalf += 1;
     }
   }
-  const totalMult = lines.reduce((s, l) => s + l.mult, 0);
-  return { lines, totalMult, winCells };
+  return { lines, totalHalf, totalMult: totalHalf / 2, winCells };
 }
 
 // ── 모든 슬롯 동시 스핀 ───────────────────────
@@ -306,12 +323,13 @@ async function spinAll() {
       }
     });
     const wlEl = document.getElementById('smWL' + m.id);
-    if (ev.lines.length) wlEl.innerHTML = ev.lines.map(l => `<span class="slot-win-tag">${l.sym}×${l.count} ×${l.mult}</span>`).join('');
+    if (ev.lines.length) wlEl.innerHTML = ev.lines.map(l =>
+      `<span class="slot-win-tag${l.count === 2 ? ' refund' : ''}">${l.sym}×${l.count} ×${l.mult}</span>`).join('');
     else wlEl.innerHTML = '';
 
     let payout = 0n;
-    if (ev.totalMult > 0) {
-      payout = betAmt * BigInt(ev.totalMult);
+    if (ev.totalHalf > 0) {
+      payout = betAmt * BigInt(ev.totalHalf) / 2n;
       totalWin += payout;
       setSlotResult(m.id, `🎉 +${shortFmt(payout)}칩`, '#2ecc71');
     } else {

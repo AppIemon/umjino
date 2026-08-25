@@ -10,8 +10,8 @@ function renderDiceUI() {
 <div class="dice-panel">
   <div id="diceDisplay" class="dice-face">🎲</div>
   <div class="dice-bet-types">
-    <button class="${diceBetType==='parity'?'btn-primary':'btn-secondary'}" onclick="setDiceBetType('parity')">홀짝 (×1.9)</button>
-    <button class="${diceBetType==='exact'?'btn-primary':'btn-secondary'}" onclick="setDiceBetType('exact')">숫자 맞추기 (×5.7)</button>
+    <button class="${diceBetType==='parity'?'btn-primary':'btn-secondary'}" onclick="setDiceBetType('parity')">홀짝 (×2.4)</button>
+    <button class="${diceBetType==='exact'?'btn-primary':'btn-secondary'}" onclick="setDiceBetType('exact')">숫자 맞추기 (×7)</button>
   </div>
   <div class="dice-guess-row" id="diceGuessRow">${renderDiceGuessRow()}</div>
   <div id="diceBetInput"></div>

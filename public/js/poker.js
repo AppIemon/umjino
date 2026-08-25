@@ -102,7 +102,7 @@ function _checkPartialHand(cards){
   if(cv[0]===3&&cv[1]>=2)return{pnum:25};
   if(cv[0]===3)return{pnum:5};
   if(cv[0]===2&&cv[1]===2)return{pnum:3};
-  if(cv[0]===2)return null;   // 원페어 단독은 배당 없음 — 교환 권장
+  if(cv[0]===2)return null;   // 원페어는 부분 반환뿐 — 교환 권장
   return{pnum:0};
 }
 function revealCards(ca,indices,i){
@@ -118,7 +118,7 @@ function evaluateHand(){
   stats.totalGames++;
   if(result.pnum>0){
     const win=currentBet*BigInt(result.pnum)/BigInt(result.pden);
-    stats.totalWins++;
+    if(result.payoutF>1) stats.totalWins++;   // 원페어(×0.5)는 반환이지 승리가 아니다
     if(cmpBigStr(win.toString(),stats.maxWin)>0)stats.maxWin=win.toString();
     if(result.payoutF>(stats.bestHandPayout||0)){stats.bestHand=result.name;stats.bestHandPayout=result.payoutF}
     saveStats();sfxWin();
@@ -182,7 +182,7 @@ function revealDoubleCard(nextCard){
   document.getElementById('doubleButtons').innerHTML='';
   document.getElementById('doubleNextCardInner').style.transform='rotateY(180deg)';
   setTimeout(()=>{
-    const bRv=rankValue[doubleBaseCard.rank],nRv=rankValue[nextCard.rank],win=nRv>bRv;  // 동점은 패배 (EV 0.94)
+    const bRv=rankValue[doubleBaseCard.rank],nRv=rankValue[nextCard.rank],win=nRv>=bRv;  // 동점은 승리 (EV 1.06)
     const msgEl=document.getElementById('doubleResultMsg'),potEl=document.getElementById('doublePot'),btns=document.getElementById('doubleButtons');
     if(win){
       sfxDoubleWin();pendingWin*=2n;

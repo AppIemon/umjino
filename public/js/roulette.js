@@ -84,7 +84,7 @@ function buildRlTable(){
   html+=`</div>`;
   // Dozens
   html+=`<div class="rl-outside-row" style="grid-template-columns:repeat(3,1fr);margin-top:2px">`;
-  [['dozen1','1–12 ×3'],['dozen2','13–24 ×3'],['dozen3','25–36 ×3']].forEach(([k,l])=>{
+  [['dozen1','1–12 ×3.6'],['dozen2','13–24 ×3.6'],['dozen3','25–36 ×3.6']].forEach(([k,l])=>{
     html+=`<div class="rl-outside-cell" id="rlOut_${k}" onclick="rlClickOutside('${k}')">${l}</div>`;
   });
   html+=`</div>`;
@@ -130,7 +130,7 @@ function rlClickNum(n){
 }
 function rlClickOutside(type){
   if(!rlJoined)return;
-  const lm={red:'🔴 레드 ×2',black:'⚫ 블랙 ×2',green:'🟢 그린(0) ×35',odd:'홀수 ×2',even:'짝수 ×2',low:'1–18 ×2',high:'19–36 ×2',dozen1:'1–12 ×3',dozen2:'13–24 ×3',dozen3:'25–36 ×3'};
+  const lm={red:'🔴 레드 ×2.4',black:'⚫ 블랙 ×2.4',green:'🟢 그린(0) ×44',odd:'홀수 ×2.4',even:'짝수 ×2.4',low:'1–18 ×2.4',high:'19–36 ×2.4',dozen1:'1–12 ×3.6',dozen2:'13–24 ×3.6',dozen3:'25–36 ×3.6'};
   rlSelectCell(type, lm[type]||type);
 }
 
@@ -168,7 +168,7 @@ function rlSelectChip(chip, chipEl){
   }));
   setTimeout(()=>{
     fly.remove();
-    const lm={red:'🔴 레드 ×2',black:'⚫ 블랙 ×2',green:'🟢 그린(0) ×35',odd:'홀수 ×2',even:'짝수 ×2',low:'1–18 ×2',high:'19–36 ×2',dozen1:'1–12 ×3',dozen2:'13–24 ×3',dozen3:'25–36 ×3'};
+    const lm={red:'🔴 레드 ×2.4',black:'⚫ 블랙 ×2.4',green:'🟢 그린(0) ×44',odd:'홀수 ×2.4',even:'짝수 ×2.4',low:'1–18 ×2.4',high:'19–36 ×2.4',dozen1:'1–12 ×3.6',dozen2:'13–24 ×3.6',dozen3:'25–36 ×3.6'};
     const label = rlTargetCell.startsWith('number_') ? '번호 '+rlTargetCell.split('_')[1] : (lm[rlTargetCell]||rlTargetCell);
     addRlPendingBet(rlTargetCell, chip.value, label);
     sfxChip();
