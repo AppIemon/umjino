@@ -2064,7 +2064,7 @@ body {
 @keyframes hwPulse{0%,100%{box-shadow:0 0 0 0 rgba(241,196,15,.5)}50%{box-shadow:0 0 0 7px rgba(241,196,15,0)}}
 .hw-empty{color:#4a5a4a;font-size:.72rem;padding:.4rem .1rem}
 
-.hw-table{display:flex;flex-direction:column;gap:.45rem;width:100%;max-width:620px;margin:0 auto}
+.hw-table{display:flex;flex-direction:column;gap:.45rem;width:100%;max-width:700px;margin:0 auto}
 .hw-bar{display:flex;justify-content:space-between;align-items:flex-start;gap:.4rem;
   background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:.5rem .65rem}
 .hw-side{flex:1;min-width:0}
@@ -2085,21 +2085,22 @@ body {
 .hw-zone-label.me{color:#2ecc71}.hw-zone-label.op{color:#e74c3c}.hw-zone-label.field{color:#f1c40f}
 .hw-jok{color:#f1c40f}
 .hw-flip{font-size:.6rem;color:#666;font-weight:400}
-.hw-row{display:flex;gap:.28rem;flex-wrap:wrap;align-items:flex-end;min-height:40px}
+.hw-row{display:flex;gap:.3rem;flex-wrap:wrap;align-items:flex-end;min-height:40px}
 .hw-row.hand-row{gap:.22rem;padding-top:.4rem}
-.hw-cap{min-height:30px}
+.hw-cap{min-height:38px}
 .hw-cap-groups{display:flex;gap:.5rem;flex-wrap:wrap}
 .hw-cap-group{display:flex;gap:1px}
-.hw-cap-group .hw-card{margin-left:-9px;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.hw-cap-group .hw-card{margin-left:-16px;box-shadow:-2px 1px 4px rgba(0,0,0,.55)}
 .hw-cap-group .hw-card:first-child{margin-left:0}
 
 .hw-field-zone{background:radial-gradient(ellipse at center,rgba(30,90,55,.42),rgba(0,0,0,.35));
-  border:1px solid rgba(46,204,113,.12);border-radius:12px;padding:.5rem .6rem;min-height:96px}
-.hw-field{display:flex;gap:.4rem;flex-wrap:wrap;align-items:flex-start}
-.hw-pile{display:flex;flex-direction:column;gap:1px}
-.hw-pile .hw-card{margin-top:-30px}
-.hw-pile .hw-card:first-child{margin-top:0}
-.hw-pile.hot{outline:1.5px dashed rgba(241,196,15,.45);outline-offset:3px;border-radius:8px}
+  border:1px solid rgba(46,204,113,.12);border-radius:12px;padding:.5rem .6rem;min-height:110px}
+/* 바닥은 같은 달끼리 한 묶음. 카드를 가리지 않고 전부 보여준다. */
+.hw-field{display:flex;gap:.45rem;flex-wrap:wrap;align-items:flex-start}
+.hw-pile{display:flex;gap:2px;padding:3px;border-radius:8px;background:rgba(0,0,0,.28);
+  border:1px solid rgba(255,255,255,.05)}
+.hw-pile.hot{border-color:rgba(241,196,15,.55);background:rgba(241,196,15,.09);
+  box-shadow:0 0 10px rgba(241,196,15,.18)}
 
 .hw-actions{min-height:2.2rem;display:flex;flex-direction:column;gap:.35rem;align-items:center}
 .hw-btn-row{display:flex;gap:.32rem;flex-wrap:wrap;justify-content:center}
@@ -2137,8 +2138,7 @@ body {
   .hw-bar{padding:.4rem .45rem}
   .hw-nick{font-size:.72rem}
   .hw-pot-val{font-size:.9rem}
-  .hw-pile .hw-card{margin-top:-26px}
-  .hw-cap-group .hw-card{margin-left:-8px}
+  .hw-cap-group .hw-card{margin-left:-13px}
   .hw-lobby-title{font-size:1.25rem}
   .hw-log{max-height:4.2rem}
 }

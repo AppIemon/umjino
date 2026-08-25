@@ -187,14 +187,17 @@ function yachtCalc(cat, dice) {
 }
 
 // ── 결과 화면 ─────────────────────────────
+const YACHT_BASE = 100, YACHT_DIV = 30, YACHT_CAP = 8;
+
 function renderYachtResult(el) {
   const scoreSum = Object.values(yachtScores).reduce((a,b)=>a+b, 0);
   const upperScore = YACHT_CATS.filter(c=>c.upper).reduce((a,c)=>a+(yachtScores[c.id]||0),0);
   const bonus = upperScore >= 63 ? 35 : 0;
   const total = scoreSum + bonus;
 
-  // 배당 계산: 점수 / 100 배율 (최소 0, 최대 3배)
-  const mult = Math.min(3, total / 100);
+  // 배당: 기준점(100점) 초과분 30점당 ×1, 최대 ×8. 기준 미달이면 꽝.
+  // 하우스 엣지 약 6% (측정 EV 0.94), 약 29%는 꽝으로 끝난다.
+  const mult = Math.min(YACHT_CAP, Math.max(0, (total - YACHT_BASE) / YACHT_DIV));
   const payout = BigInt(Math.round(Number(yachtBetAmt) * mult));
   const profit = payout - yachtBetAmt;
 

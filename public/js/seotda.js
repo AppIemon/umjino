@@ -104,9 +104,9 @@ function sdRender(d) {
   const need = BigInt(d.roundHigh || '0') - BigInt(d.myCommitted || '0');
   const phaseTxt = d.phase === 'bet1' ? '1차 베팅 (첫 장)' : d.phase === 'bet2' ? '최종 베팅 (두 장)' : '패 공개';
 
-  const opCards = d.opCards.map((c, i) => c ? hwCardHTML(c, { w: 58 }) : hwBackHTML({ w: 58 })).join('')
+  const opCards = d.opCards.map((c, i) => c ? hwCardHTML(c, { w: 76 }) : hwBackHTML({ w: 76 })).join('')
     || `<div class="hw-empty">대기 중</div>`;
-  const myCards = d.myCards.map(c => hwCardHTML(c, { w: 74 })).join('');
+  const myCards = d.myCards.map(c => hwCardHTML(c, { w: 96 })).join('');
 
   el.innerHTML = `<div class="hw-table">
   <div class="hw-bar">
@@ -160,8 +160,8 @@ function sdRenderOver(d) {
       ${delta >= 0n ? '+' : '-'}${shortFmt(delta < 0n ? -delta : delta)}칩</div>
     ${sd ? `<div class="hw-over-jok">${escHtml(sd.p0)} vs ${escHtml(sd.p1)}</div>` : ''}
     <div class="hw-over-cards">
-      <div><div class="hw-zone-label me">내 패</div><div class="hw-row">${d.myCards.map(c => hwCardHTML(c, { w: 60 })).join('')}</div></div>
-      <div><div class="hw-zone-label op">상대 패</div><div class="hw-row">${(d.opCards || []).filter(Boolean).map(c => hwCardHTML(c, { w: 60 })).join('') || '<div class="hw-empty">다이</div>'}</div></div>
+      <div><div class="hw-zone-label me">내 패</div><div class="hw-row">${d.myCards.map(c => hwCardHTML(c, { w: 78 })).join('')}</div></div>
+      <div><div class="hw-zone-label op">상대 패</div><div class="hw-row">${(d.opCards || []).filter(Boolean).map(c => hwCardHTML(c, { w: 78 })).join('') || '<div class="hw-empty">다이</div>'}</div></div>
     </div>
     <div class="hw-btn-row" style="margin-top:.9rem">
       <button class="pvp-btn primary" onclick="sdLeave().then(sdQueue)">다시 매칭</button>

@@ -2083,15 +2083,15 @@ app.post('/api/dice', async (req, res) => {
     if (amt <= 0n) return res.status(400).json({ error: '0보다 커야 함' });
     if (BigInt(p.chips || '0') < amt) return res.status(400).json({ error: '칩 부족' });
     const roll = Math.floor(Math.random() * 6) + 1;
-    let won = false, mult = 0n;
-    if (betType === 'exact') { won = roll === Number(guess); mult = 7n; }   // EV 7/6 ≈ 1.17
-    else if (betType === 'parity') { won = (roll % 2 === 0) === (guess === 'even'); mult = 2n; } // EV 1.0 → 2.2 적용
+    // 배당은 분수로 준다 — 하우스 엣지 5% (양쪽 모두 EV 0.95)
+    let won = false, num = 0n, den = 1n;
+    if (betType === 'exact') { won = roll === Number(guess); num = 57n; den = 10n; }        // ×5.7 → EV 0.95
+    else if (betType === 'parity') { won = (roll % 2 === 0) === (guess === 'even'); num = 19n; den = 10n; } // ×1.9 → EV 0.95
     else return res.status(400).json({ error: 'betType: exact|parity' });
-    const newChips = won
-      ? (BigInt(p.chips) + amt * (mult - 1n)).toString()
-      : (BigInt(p.chips) - amt).toString();
+    const payout = won ? amt * num / den : 0n;
+    const newChips = (BigInt(p.chips) - amt + payout).toString();
     await col.updateOne({ nickname }, { $set: { chips: newChips } });
-    res.json({ roll, won, newChips, payout: won ? (amt * mult).toString() : '0' });
+    res.json({ roll, won, newChips, payout: payout.toString() });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2099,10 +2099,12 @@ app.post('/api/dice', async (req, res) => {
 // HORSE RACING  /api/horse
 // ═══════════════════════════════════════════════════════════
 // race 생성은 자동: GET creates/returns active race, POST places bet
+// ev = 베팅 1당 평균 환급률. 1 미만이어야 하우스 엣지가 생긴다.
+// 거리가 길수록 엣지가 크고 배당 편차도 커진다.
 const HORSE_DISTANCES = [
-  { label: '단거리 (1000m)', duration: 20, ev: 1.20 },
-  { label: '중거리 (2000m)', duration: 40, ev: 1.28 },
-  { label: '장거리 (3000m)', duration: 65, ev: 1.35 },
+  { label: '단거리 (1000m)', duration: 20, ev: 0.94 },
+  { label: '중거리 (2000m)', duration: 40, ev: 0.91 },
+  { label: '장거리 (3000m)', duration: 65, ev: 0.88 },
 ];
 
 function generateHorseRace(numHorses, distIdx) {
@@ -2111,7 +2113,7 @@ function generateHorseRace(numHorses, distIdx) {
   const total = rawOdds.reduce((a, b) => a + b, 0);
   const targetSum = numHorses / dist.ev;
   const odds = rawOdds.map(o => (o / total) * targetSum);
-  const payouts = odds.map(o => Math.max(1.2, numHorses / o));
+  const payouts = odds.map(o => Math.max(1.05, numHorses / o));   // 하한이 높으면 인기마 EV가 새어나간다
   const NAMES = ['천리마','적토마','번개','폭풍','질주','황금','바람','불꽃','태양','달빛'];
   const horses = Array.from({ length: numHorses }, (_, i) => ({
     name: NAMES[i] || `말${i+1}`,

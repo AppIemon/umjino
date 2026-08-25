@@ -5,7 +5,6 @@ const DM_API = '/api/dm';
 let dmPollTimer = null;
 let dmCurrentConv = null;
 let _ltTimer = null;
-let _bbPicks = {};
 
 // ── API helpers ────────────────────────────
 function dmFetch(action, extra) {

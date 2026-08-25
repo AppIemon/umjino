@@ -118,7 +118,7 @@ function gsFieldHTML(d) {
   const opts = choosing ? d.pending.options : [];
   return months.map(m => `<div class="hw-pile${byMonth[m].length >= 3 ? ' hot' : ''}">${
     byMonth[m].map(c => hwCardHTML(c, {
-      w: 40,
+      w: 52,
       cls: opts.includes(c.id) ? 'pick' : '',
       onclick: opts.includes(c.id) ? `gsChoose('${c.id}')` : null,
     })).join('')}</div>`).join('');
@@ -153,7 +153,7 @@ function gsRender(d) {
   </div>
 
   <div class="hw-zone op"><div class="hw-zone-label op">상대 획득패</div>
-    <div class="hw-cap">${hwCapturedHTML(d.op.captured, 24)}</div></div>
+    <div class="hw-cap">${hwCapturedHTML(d.op.captured, 34)}</div></div>
 
   <div class="hw-field-zone">
     <div class="hw-zone-label field">바닥${d.lastFlip ? ` <span class="hw-flip">방금 뒤집힘: ${d.lastFlip.m}월</span>` : ''}</div>
@@ -161,12 +161,12 @@ function gsRender(d) {
   </div>
 
   <div class="hw-zone me"><div class="hw-zone-label me">내 획득패</div>
-    <div class="hw-cap">${hwCapturedHTML(d.me.captured, 24)}</div></div>
+    <div class="hw-cap">${hwCapturedHTML(d.me.captured, 34)}</div></div>
 
   <div class="hw-zone hand"><div class="hw-zone-label me">내 손패${
       d.isMyTurn && d.phase === 'playing' ? ' — 낼 패를 고르세요' : ''}</div>
     <div class="hw-row hand-row">${d.myHand.map(c => hwCardHTML(c, {
-      w: 46,
+      w: 60,
       cls: d.isMyTurn && d.phase === 'playing' ? 'playable' : 'idle',
       onclick: d.isMyTurn && d.phase === 'playing' ? `gsPlay('${c.id}')` : null,
     })).join('') || '<div class="hw-empty">손패 없음</div>'}</div></div>
@@ -202,8 +202,8 @@ function gsRenderOver(d) {
     <div class="hw-over-delta" style="color:${delta >= 0n ? '#2ecc71' : '#e74c3c'}">
       ${delta >= 0n ? '+' : '-'}${shortFmt(delta < 0n ? -delta : delta)}칩</div>
     <div class="hw-over-cards">
-      <div><div class="hw-zone-label me">내 획득패</div>${hwCapturedHTML(d.me.captured, 26)}</div>
-      <div><div class="hw-zone-label op">상대 획득패</div>${hwCapturedHTML(d.op.captured, 26)}</div>
+      <div><div class="hw-zone-label me">내 획득패</div>${hwCapturedHTML(d.me.captured, 36)}</div>
+      <div><div class="hw-zone-label op">상대 획득패</div>${hwCapturedHTML(d.op.captured, 36)}</div>
     </div>
     <div class="hw-btn-row" style="margin-top:.9rem">
       <button class="pvp-btn primary" onclick="gsLeave().then(gsQueue)">다시 매칭</button>

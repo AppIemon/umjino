@@ -102,7 +102,7 @@ function _checkPartialHand(cards){
   if(cv[0]===3&&cv[1]>=2)return{pnum:25};
   if(cv[0]===3)return{pnum:5};
   if(cv[0]===2&&cv[1]===2)return{pnum:3};
-  if(cv[0]===2)return{pnum:1};
+  if(cv[0]===2)return null;   // 원페어 단독은 배당 없음 — 교환 권장
   return{pnum:0};
 }
 function revealCards(ca,indices,i){
@@ -182,7 +182,7 @@ function revealDoubleCard(nextCard){
   document.getElementById('doubleButtons').innerHTML='';
   document.getElementById('doubleNextCardInner').style.transform='rotateY(180deg)';
   setTimeout(()=>{
-    const bRv=rankValue[doubleBaseCard.rank],nRv=rankValue[nextCard.rank],win=nRv>=bRv;
+    const bRv=rankValue[doubleBaseCard.rank],nRv=rankValue[nextCard.rank],win=nRv>bRv;  // 동점은 패배 (EV 0.94)
     const msgEl=document.getElementById('doubleResultMsg'),potEl=document.getElementById('doublePot'),btns=document.getElementById('doubleButtons');
     if(win){
       sfxDoubleWin();pendingWin*=2n;

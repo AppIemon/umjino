@@ -1,15 +1,16 @@
 // ═══════════════════════════════════════════
 // hwatu.js – 화투 카드 렌더러 (섯다 / 고스톱 공용)
 //
-// 카드 그림은 "실제 이미지 우선"이다.
-//   public/img/hwatu/<월>-<번호>.png  (예: 1-0.png = 1월 광, 12-3.png = 비 쌍피)
-// 이미지가 있으면 그걸 쓰고, 없으면 아래 벡터 아트로 자동 대체된다.
-// 이미지 세트를 폴더에 넣기만 하면 코드 수정 없이 바로 적용된다.
+// 카드 그림은 public/img/hwatu/<월>-<번호>.png 의 실제 카드 이미지를 쓴다.
+//   (예: 1-0.png = 1월 송학 광, 12-3.png = 비 쌍피 — 대응표는 그 폴더의 README.md)
+// 이미지를 못 읽는 경우에만 아래 벡터 아트로 자동 대체된다(안전망).
+// 다른 카드 세트로 바꾸고 싶으면 같은 이름으로 파일만 교체하면 된다.
 // ═══════════════════════════════════════════
 
 const HW_IMG_BASE = './img/hwatu/';
 const HW_IMG_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];   // 순서대로 탐색
 let HW_IMG_EXT = null;
+const HW_CARD_RATIO = 1.6;    // 카드 세로/가로 비 (이미지 240×384에 맞춤)
 
 // null = 아직 확인 전, true = 이미지 세트 있음, false = 벡터 아트 사용
 let HW_IMG_READY = null;
@@ -164,7 +165,7 @@ function hwFallbackSVG(card) {
     ribbon = `<rect x="13" y="60" width="64" height="15" rx="3" fill="${rc}" opacity=".92"/>
       ${txt ? `<text x="45" y="71.5" font-size="10" fill="#fff" text-anchor="middle" font-weight="bold">${txt}</text>` : ''}`;
   }
-  return `<svg viewBox="0 0 90 140" xmlns="http://www.w3.org/2000/svg" class="hw-svg">
+  return `<svg viewBox="0 0 90 140" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" class="hw-svg">
   <rect x="1" y="1" width="88" height="138" rx="8" fill="${bg}" stroke="${ink}" stroke-width="2"/>
   <rect x="5" y="5" width="80" height="130" rx="6" fill="none" stroke="${ink}" stroke-width=".7" opacity=".35"/>
   <rect x="5" y="5" width="80" height="17" rx="5" fill="${ink}" opacity=".9"/>
@@ -182,7 +183,7 @@ function hwFallbackSVG(card) {
 // opts: {w, h, cls, onclick, sel, dim, title}
 function hwCardHTML(card, opts) {
   const o = opts || {};
-  const w = o.w || 52, h = o.h || Math.round((o.w || 52) * 140 / 90);
+  const w = o.w || 52, h = o.h || Math.round((o.w || 52) * HW_CARD_RATIO);
   const cls = ['hw-card', o.cls || '', o.sel ? 'sel' : '', o.dim ? 'dim' : ''].filter(Boolean).join(' ');
   const style = `width:${w}px;height:${h}px`;
   const click = o.onclick ? ` onclick="${o.onclick}"` : '';
@@ -195,9 +196,9 @@ function hwCardHTML(card, opts) {
 
 function hwBackHTML(opts) {
   const o = opts || {};
-  const w = o.w || 52, h = o.h || Math.round((o.w || 52) * 140 / 90);
+  const w = o.w || 52, h = o.h || Math.round((o.w || 52) * HW_CARD_RATIO);
   return `<div class="hw-card back" style="width:${w}px;height:${h}px">
-  <svg viewBox="0 0 90 140" xmlns="http://www.w3.org/2000/svg" class="hw-svg">
+  <svg viewBox="0 0 90 140" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" class="hw-svg">
     <rect x="1" y="1" width="88" height="138" rx="8" fill="#7b1421" stroke="#4a0d15" stroke-width="2"/>
     <rect x="8" y="8" width="74" height="124" rx="6" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.4"/>
     <circle cx="45" cy="70" r="21" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1.4"/>
