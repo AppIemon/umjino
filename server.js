@@ -1008,7 +1008,11 @@ app.post('/api/mp', async (req, res) => {
       if (betAct === 'fold') {
         p.folded = true;
         game.phase = 'showdown';
-        game.showdownResult = { winner: 1-pidx, byFold: true };
+        game.showdownResult = {
+          winner: 1-pidx, byFold: true,
+          p0HandName: pidx===0 ? '폴드' : '승리',
+          p1HandName: pidx===1 ? '폴드' : '승리',
+        };
         await mpFinishGame(db, game, 1-pidx);
       } else if (betAct === 'check') {
         if (game.roundHighBet > p.roundPaid) return res.status(400).json({ error: '콜 필요' });
